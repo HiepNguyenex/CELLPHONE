@@ -1,4 +1,4 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, useLocation } from "react-router-dom";
 import Home from "./pages/Home";
 import About from "./pages/About";
 import Contact from "./pages/Contact";
@@ -31,20 +31,28 @@ import ProductsAdmin from "./admin/ProductsAdmin";
 import OrdersAdmin from "./admin/OrdersAdmin";
 import UsersAdmin from "./admin/UsersAdmin";
 import CategoriesAdmin from "./admin/CategoriesAdmin";
-import SettingsAdmin from "./admin/SettingsAdmin"; // ✅ THÊM
+import SettingsAdmin from "./admin/SettingsAdmin";
+import BrandsAdmin from "./admin/BrandsAdmin";
 
 import AuthProvider from "./context/AuthContext";
 import RequireAuth from "./components/RequireAuth";
 import { WishlistProvider } from "./context/WishlistContext";
-import { ToastProvider } from "./components/Toast"; // ✅ Đã có từ trước
+import { ToastProvider } from "./components/Toast";
 
 export default function App() {
+  const location = useLocation();
+  const isAdminRoute = location.pathname.startsWith("/admin");
+
   return (
     <AuthProvider>
       <ToastProvider>
         <WishlistProvider>
-          <Topbar />
-          <Navbar />
+          {!isAdminRoute && (
+            <>
+              <Topbar />
+              <Navbar />
+            </>
+          )}
 
           <Routes>
             <Route path="/" element={<Home />} />
@@ -53,7 +61,6 @@ export default function App() {
             <Route path="/blog" element={<Blog />} />
             <Route path="/article/:id" element={<Article />} />
             <Route path="/faq" element={<FAQ />} />
-
             <Route path="/product/:id" element={<ProductDetail />} />
             <Route path="/search" element={<Search />} />
             <Route
@@ -64,16 +71,14 @@ export default function App() {
                 </RequireAuth>
               }
             />
-
             <Route path="/cart" element={<Cart />} />
             <Route path="/checkout" element={<Checkout />} />
             <Route path="/thankyou" element={<ThankYou />} />
-
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/password-reset" element={<PasswordReset />} />
 
-            {/* Private (user) */}
+            {/* USER AUTH */}
             <Route
               path="/my-account"
               element={
@@ -110,7 +115,7 @@ export default function App() {
             <Route path="/terms" element={<Terms />} />
             <Route path="/privacy" element={<Privacy />} />
 
-            {/* ===== ADMIN ROUTES ===== */}
+            {/* ADMIN */}
             <Route
               path="/admin"
               element={
@@ -122,15 +127,16 @@ export default function App() {
               <Route index element={<Dashboard />} />
               <Route path="products" element={<ProductsAdmin />} />
               <Route path="categories" element={<CategoriesAdmin />} />
+              <Route path="brands" element={<BrandsAdmin />} />
               <Route path="orders" element={<OrdersAdmin />} />
               <Route path="users" element={<UsersAdmin />} />
-              <Route path="settings" element={<SettingsAdmin />} /> {/* ✅ THÊM */}
+              <Route path="settings" element={<SettingsAdmin />} />
             </Route>
 
             <Route path="*" element={<NotFound />} />
           </Routes>
 
-          <Footer />
+          {!isAdminRoute && <Footer />}
         </WishlistProvider>
       </ToastProvider>
     </AuthProvider>

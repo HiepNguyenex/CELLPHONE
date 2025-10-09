@@ -45,12 +45,14 @@ export const logout = () => api.post("/v1/logout");
 
 // ===== CATALOG (PUBLIC) =====
 export const getProducts = (params = {}) => api.get("/v1/products", { params });
-export const getProductDetail = (id) => api.get(`/v1/products/${id}`);
+export const getProductDetail = (idOrSlug) => api.get(`/v1/products/${idOrSlug}`);
 export const getCategories = () => api.get("/v1/categories");
 export const getBanners = () => api.get("/v1/banners");
 export const getFaqs = () => api.get("/v1/faqs");
+// ✅ THÊM: Public Brands
+export const getBrands = (params = {}) => api.get("/v1/brands", { params });
 
-// ===== SETTINGS (PUBLIC) ===== // ✅ THÊM MỚI
+// ===== SETTINGS (PUBLIC) =====
 export const getSettings = () => api.get("/v1/settings");
 
 // ===== CHECKOUT / ORDERS (USER) =====
@@ -124,6 +126,29 @@ export const adminUpdateCategory = (id, payload = {}) =>
 export const adminDeleteCategory = (id) =>
   api.delete(`/v1/admin/categories/${id}`);
 
+// ===== ADMIN BRANDS =====  // ✅ THÊM
+export const adminGetBrands = (params = {}) =>
+  api.get("/v1/admin/brands", { params });
+
+export const adminCreateBrand = (payload = {}) => {
+  const fd = new FormData();
+  Object.entries(payload).forEach(([k, v]) => {
+    if (v !== undefined && v !== null) fd.append(k, v);
+  });
+  return api.post("/v1/admin/brands", fd);
+};
+
+export const adminUpdateBrand = (id, payload = {}) => {
+  const fd = new FormData();
+  Object.entries(payload).forEach(([k, v]) => {
+    if (v !== undefined && v !== null) fd.append(k, v);
+  });
+  return api.post(`/v1/admin/brands/${id}`, fd);
+};
+
+export const adminDeleteBrand = (id) =>
+  api.delete(`/v1/admin/brands/${id}`);
+
 // ===== ADMIN ORDERS =====
 export const adminGetOrders = (params = {}) =>
   api.get("/v1/admin/orders", { params });
@@ -132,15 +157,11 @@ export const adminGetOrder = (id) => api.get(`/v1/admin/orders/${id}`);
 
 export const adminDeleteOrder = (id) => api.delete(`/v1/admin/orders/${id}`);
 
-/**
- * ✅ Cập nhật trạng thái đơn hàng (kèm ghi chú)
- */
+/** ✅ Cập nhật trạng thái đơn hàng (kèm ghi chú) */
 export const adminUpdateOrderStatus = (id, status, note) =>
   api.post(`/v1/admin/orders/${id}/status`, { status, note });
 
-/**
- * ✅ Tải file hóa đơn PDF
- */
+/** ✅ Tải file hóa đơn PDF */
 export const adminDownloadInvoice = (id) =>
   api.get(`/v1/admin/orders/${id}/invoice`, { responseType: "blob" });
 

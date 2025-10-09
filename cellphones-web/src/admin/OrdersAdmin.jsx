@@ -1,4 +1,3 @@
-// src/admin/OrdersAdmin.jsx
 import { useEffect, useState, useRef, Fragment } from "react";
 import {
   adminGetOrders,
@@ -7,35 +6,63 @@ import {
   adminDeleteOrder,
   adminDownloadInvoice,
 } from "../services/api";
-import api from "../services/api"; // để fallback mở link trực tiếp
+import api from "../services/api";
 import { Dialog, Transition } from "@headlessui/react";
 import {
   X, Printer, Copy, User, MapPin, Mail, Phone, Package, Truck,
   DollarSign, Trash2, Download,
+  Loader2, CheckCircle2, ShoppingBag, XCircle, CreditCard, RotateCcw, CircleDollarSign,
 } from "lucide-react";
 import ConfirmDialog from "../components/ConfirmDialog";
 
 /* ================== Helpers ================== */
 const money = (v) => `${(Number(v) || 0).toLocaleString("vi-VN")}₫`;
 const fmt = (d) => (d ? new Date(d).toLocaleString("vi-VN") : "");
-const STATUS_FLOW = ["pending", "processing", "shipping", "shipped", "completed", "canceled"];
+
+/* ================== STATUS SETTINGS ================== */
+const STATUS_FLOW = [
+  "pending",
+  "paid",
+  "processing",
+  "shipping",
+  "shipped",
+  "completed",
+  "canceled",
+  "refunded",
+];
+
+// Thêm label + icon + màu để hiển thị đẹp
+const STATUS_INFO = {
+  pending:    { label: "🕓 Chờ xử lý",     color: "bg-yellow-100 text-yellow-800 border-yellow-300",   icon: Loader2 },
+  paid:       { label: "💸 Đã thanh toán", color: "bg-emerald-100 text-emerald-800 border-emerald-300", icon: CreditCard },
+  processing: { label: "⚙️ Đang xử lý",    color: "bg-blue-100 text-blue-800 border-blue-300",         icon: CircleDollarSign },
+  shipping:   { label: "🚚 Đang giao",     color: "bg-purple-100 text-purple-800 border-purple-300",   icon: Truck },
+  shipped:    { label: "📦 Đã gửi",         color: "bg-indigo-100 text-indigo-800 border-indigo-300",   icon: ShoppingBag },
+  completed:  { label: "✅ Hoàn tất",       color: "bg-green-100 text-green-800 border-green-300",      icon: CheckCircle2 },
+  canceled:   { label: "❌ Đã huỷ",         color: "bg-red-100 text-red-800 border-red-300",            icon: XCircle },
+  refunded:   { label: "↩️ Hoàn tiền",     color: "bg-gray-200 text-gray-700 border-gray-300",         icon: RotateCcw },
+};
+
 const STATUS_BADGE = {
   pending: "bg-yellow-100 text-yellow-800",
+  paid: "bg-emerald-100 text-emerald-800",
   processing: "bg-blue-100 text-blue-800",
   shipping: "bg-purple-100 text-purple-800",
   shipped: "bg-indigo-100 text-indigo-800",
   completed: "bg-green-100 text-green-800",
   canceled: "bg-red-100 text-red-800",
+  refunded: "bg-gray-200 text-gray-700",
 };
+
 const CAN_DELETE = (s) => ["pending", "canceled"].includes(s);
 
-/* ================== Simple Toast (inline, no lib) ================== */
+/* ================== Simple Toast ================== */
 const TYPE_STYLE = {
-  info:    { dot: "bg-blue-500",    title: "Thông báo" },
+  info: { dot: "bg-blue-500", title: "Thông báo" },
   success: { dot: "bg-emerald-500", title: "Thành công" },
-  error:   { dot: "bg-rose-500",    title: "Lỗi" },
-  warning: { dot: "bg-amber-500",   title: "Cảnh báo" },
-  loading: { dot: "bg-gray-400",    title: "Đang xử lý…" },
+  error: { dot: "bg-rose-500", title: "Lỗi" },
+  warning: { dot: "bg-amber-500", title: "Cảnh báo" },
+  loading: { dot: "bg-gray-400", title: "Đang xử lý…" },
 };
 
 function ToastItem({ t, onClose }) {
@@ -45,7 +72,7 @@ function ToastItem({ t, onClose }) {
       <span className={`mt-1 h-2.5 w-2.5 rounded-full ${s.dot} ${t.type==='loading'?'animate-pulse':''}`} />
       <div className="flex-1 min-w-0">
         <div className="text-sm font-semibold text-gray-900">{t.title || s.title}</div>
-        {t.desc ? <div className="text-xs text-gray-600 mt-0.5 break-words">{t.desc}</div> : null}
+        {t.desc && <div className="text-xs text-gray-600 mt-0.5 break-words">{t.desc}</div>}
       </div>
       <div className="flex items-center gap-2">
         {t.action?.label && typeof t.action.onClick === "function" && (
@@ -73,7 +100,7 @@ function ToastContainer({ toasts, remove }) {
   );
 }
 
-/* ================== Page ================== */
+/* ================== PAGE ================== */
 export default function OrdersAdmin() {
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -190,7 +217,31 @@ export default function OrdersAdmin() {
     <div>
       <h2 className="text-2xl font-bold mb-6">🧾 Quản lý đơn hàng</h2>
 
-      {/* Filters */}
+      {/* Quick filter chips (lọc nhanh theo trạng thái) */}
+      <div className="flex flex-wrap gap-2 mb-3">
+        {STATUS_FLOW.map((st) => {
+          const s = STATUS_INFO[st];
+          const active = filters.status === st;
+          return (
+            <button
+              key={st}
+              onClick={() =>
+                setFilters((f) => ({ ...f, status: f.status === st ? "" : st }))
+              }
+              className={`px-3 py-1.5 rounded-full text-sm border transition ${
+                active
+                  ? `${s.color} ring-2 ring-offset-1`
+                  : "bg-white hover:bg-gray-50"
+              }`}
+              title={`Lọc: ${s.label}`}
+            >
+              {s.icon && <s.icon size={14} className="inline mr-1" />} {s.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Filters (giữ bộ lọc cũ) */}
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <input
           value={filters.q}
@@ -231,65 +282,64 @@ export default function OrdersAdmin() {
           </thead>
           <tbody>
             {loading && (
-              <tr>
-                <td colSpan={6} className="p-6 text-center text-gray-500">Đang tải...</td>
-              </tr>
+              <tr><td colSpan={6} className="p-6 text-center text-gray-500">Đang tải...</td></tr>
             )}
-            {!loading && list.map((o) => (
-              <tr key={o.id} className="border-t hover:bg-gray-50">
-                <td className="p-3 font-medium">#{o.id}</td>
-                <td className="p-3">
-                  {o.name || o.user?.name || "Khách"}
-                  <br />
-                  <span className="text-gray-500 text-xs">
-                    {o.email || o.user?.email || ""}
-                  </span>
-                </td>
-                <td className="p-3 text-red-600 font-semibold">{money(o.total)}</td>
-                <td className="p-3">
-                  <span className={`px-2 py-1 rounded text-xs font-medium ${STATUS_BADGE[o.status] || "bg-gray-100 text-gray-700"}`}>
-                    {o.status}
-                  </span>
-                </td>
-                <td className="p-3">{fmt(o.created_at)}</td>
-                <td className="p-3">
-                  <div className="flex justify-end gap-2">
-                    <button
-                      onClick={() => openDetail(o.id)}
-                      className="px-3 py-2 bg-gray-800 text-white rounded hover:bg-black"
+            {!loading && list.map((o) => {
+              const s = STATUS_INFO[o.status] || {};
+              return (
+                <tr key={o.id} className="border-t hover:bg-gray-50">
+                  <td className="p-3 font-medium">#{o.id}</td>
+                  <td className="p-3">
+                    {o.name || o.user?.name || "Khách"}
+                    <br /><span className="text-gray-500 text-xs">{o.email || o.user?.email || ""}</span>
+                  </td>
+                  <td className="p-3 text-red-600 font-semibold">{money(o.total)}</td>
+                  <td className="p-3">
+                    <span
+                      className={`px-2 py-1 rounded text-xs font-medium border ${s.color || STATUS_BADGE[o.status] || "bg-gray-100 text-gray-700"}`}
+                      title={o.status}
                     >
-                      Chi tiết
-                    </button>
-                    <button
-                      disabled={["completed", "canceled"].includes(o.status)}
-                      onClick={() => setStatusModal({ open: true, order: o })}
-                      className={`px-3 py-2 rounded text-white ${
-                        ["completed", "canceled"].includes(o.status)
-                          ? "bg-gray-400 cursor-not-allowed"
-                          : "bg-green-600 hover:bg-green-700"
-                      }`}
-                    >
-                      Cập nhật
-                    </button>
-                    <button
-                      disabled={!CAN_DELETE(o.status)}
-                      onClick={() => setDelModal({ open: true, order: o })}
-                      className={`px-3 py-2 rounded text-white ${
-                        CAN_DELETE(o.status)
-                          ? "bg-red-600 hover:bg-red-700"
-                          : "bg-gray-400 cursor-not-allowed"
-                      }`}
-                    >
-                      Xóa
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+                      {s.label || o.status}
+                    </span>
+                  </td>
+                  <td className="p-3">{fmt(o.created_at)}</td>
+                  <td className="p-3">
+                    <div className="flex justify-end gap-2">
+                      <button
+                        onClick={() => openDetail(o.id)}
+                        className="px-3 py-2 bg-gray-800 text-white rounded hover:bg-black"
+                      >
+                        Chi tiết
+                      </button>
+                      <button
+                        disabled={["completed", "canceled", "refunded"].includes(o.status)}
+                        onClick={() => setStatusModal({ open: true, order: o })}
+                        className={`px-3 py-2 rounded text-white ${
+                          ["completed","canceled","refunded"].includes(o.status)
+                            ? "bg-gray-400 cursor-not-allowed"
+                            : "bg-green-600 hover:bg-green-700"
+                        }`}
+                      >
+                        Cập nhật
+                      </button>
+                      <button
+                        disabled={!CAN_DELETE(o.status)}
+                        onClick={() => setDelModal({ open: true, order: o })}
+                        className={`px-3 py-2 rounded text-white ${
+                          CAN_DELETE(o.status)
+                            ? "bg-red-600 hover:bg-red-700"
+                            : "bg-gray-400 cursor-not-allowed"
+                        }`}
+                      >
+                        Xóa
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
             {!loading && !list.length && (
-              <tr>
-                <td colSpan={6} className="p-6 text-center text-gray-500">Không có đơn nào.</td>
-              </tr>
+              <tr><td colSpan={6} className="p-6 text-center text-gray-500">Không có đơn nào.</td></tr>
             )}
           </tbody>
         </table>
@@ -333,7 +383,7 @@ export default function OrdersAdmin() {
   );
 }
 
-/* ============= Small UI lines ============= */
+/* ============= Line helper ============= */
 function Line({ label, children, icon: Icon }) {
   return (
     <div className="flex items-start gap-2">
@@ -349,49 +399,28 @@ function OrderDetailModal({ open, onClose, order, onAskDelete, addToast, updateT
   const _onClose = typeof onClose === "function" ? onClose : () => {};
   if (!order) return null;
 
-  // tải PDF hoá đơn + toast đẹp + fallback khi bị chặn bởi IDM/AdBlock
   async function downloadInvoice() {
     const tid = addToast({ type: "loading", title: "Đang tạo PDF…" });
     try {
       const res = await adminDownloadInvoice(order.id);
-
       const dispo = res.headers?.["content-disposition"] || "";
       const m = /filename\*?=(?:UTF-8'')?"?([^"]+)"?/i.exec(dispo);
       const filename = decodeURIComponent(m?.[1] || `invoice-${order.code || order.id}.pdf`);
-
       const blob = new Blob([res.data], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
-
       const a = document.createElement("a");
       a.href = url; a.download = filename; a.click();
       setTimeout(() => URL.revokeObjectURL(url), 15000);
-
-      updateToast(tid, {
-        type: "success",
-        title: "Đã tải hóa đơn",
-        desc: filename,
-        action: { label: "Mở", onClick: () => window.open(url, "_blank") },
-      });
+      updateToast(tid, { type: "success", title: "Đã tải hóa đơn", desc: filename, action: { label: "Mở", onClick: () => window.open(url, "_blank") } });
     } catch (e) {
       const msg = String(e?.message || e);
-      const blocked = /ERR_BLOCKED_BY_CLIENT/i.test(msg) || /blocked_by_client/i.test(msg);
-
-      if (blocked) {
+      if (/ERR_BLOCKED_BY_CLIENT/i.test(msg)) {
         const directUrl = `${api.defaults.baseURL}/v1/admin/orders/${order.id}/invoice`;
         window.open(directUrl, "_blank");
-        updateToast(tid, {
-          type: "warning",
-          title: "Đang tải qua trình quản lý tải xuống",
-          desc: "Nếu không thấy, hãy tắt AdBlock/IDM cho localhost & 127.0.0.1.",
-        });
+        updateToast(tid, { type: "warning", title: "Đang tải qua IDM/AdBlock", desc: "Nếu không thấy, tắt AdBlock/IDM cho localhost & 127.0.0.1." });
         return;
       }
-
-      updateToast(tid, {
-        type: "error",
-        title: "Tải hoá đơn thành công",
-        desc: e?.response?.data?.message || e?.message || "Vui lòng thử lại.",
-      });
+      updateToast(tid, { type: "error", title: "Tải hoá đơn thất bại", desc: e?.response?.data?.message || e?.message || "Vui lòng thử lại." });
     }
   }
 
@@ -401,26 +430,17 @@ function OrderDetailModal({ open, onClose, order, onAskDelete, addToast, updateT
     { k: "Giảm giá", v: -Math.abs(order.discount || 0) },
     { k: "Tổng tiền", v: order.total, strong: true },
   ];
-
   const copyAddr = () => navigator.clipboard?.writeText(order.address || "");
 
   return (
     <Transition appear show={open} as={Fragment}>
       <Dialog open={open} onClose={_onClose} className="relative z-50">
-        <Transition.Child
-          as={Fragment}
-          enter="ease-out duration-200" enterFrom="opacity-0" enterTo="opacity-100"
-          leave="ease-in duration-150" leaveFrom="opacity-100" leaveTo="opacity-0"
-        >
+        <Transition.Child as={Fragment} enter="ease-out duration-200" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-150" leaveFrom="opacity-100" leaveTo="opacity-0">
           <div className="fixed inset-0 bg-black/40" />
         </Transition.Child>
 
         <div className="fixed inset-0 flex items-center justify-center p-4">
-          <Transition.Child
-            as={Fragment}
-            enter="ease-out duration-200" enterFrom="opacity-0 scale-95" enterTo="opacity-100 scale-100"
-            leave="ease-in duration-150" leaveFrom="opacity-100 scale-100" leaveTo="opacity-0 scale-95"
-          >
+          <Transition.Child as={Fragment} enter="ease-out duration-200" enterFrom="opacity-0 scale-95" enterTo="opacity-100 scale-100" leave="ease-in duration-150" leaveFrom="opacity-100 scale-100" leaveTo="opacity-0 scale-95">
             <Dialog.Panel className="w-full max-w-4xl bg-white rounded-2xl shadow-xl">
               <div className="flex items-center justify-between px-6 py-4 border-b">
                 <div>
@@ -431,61 +451,28 @@ function OrderDetailModal({ open, onClose, order, onAskDelete, addToast, updateT
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={downloadInvoice}
-                    className="px-3 py-2 rounded border hover:bg-gray-50 flex items-center gap-2"
-                    title="Tải PDF"
-                  >
-                    <Download size={16}/> Tải PDF
-                  </button>
-                  <button
-                    onClick={() => window.print()}
-                    className="px-3 py-2 rounded border hover:bg-gray-50 flex items-center gap-2"
-                    title="In hóa đơn"
-                  >
-                    <Printer size={16} /> In hóa đơn
-                  </button>
-                  <button
-                    disabled={!CAN_DELETE(order.status)}
-                    onClick={onAskDelete}
-                    className={`px-3 py-2 rounded border flex items-center gap-2 ${
-                      CAN_DELETE(order.status) ? "text-red-600 border-red-200 hover:bg-red-50" : "text-gray-400 cursor-not-allowed"
-                    }`}
-                    title="Xóa đơn"
-                  >
-                    <Trash2 size={16} /> Xóa đơn
-                  </button>
-                  <button onClick={_onClose} className="p-2 rounded hover:bg-gray-100">
-                    <X size={18} />
-                  </button>
+                  <button onClick={downloadInvoice} className="px-3 py-2 rounded border hover:bg-gray-50 flex items-center gap-2"><Download size={16}/> Tải PDF</button>
+                  <button onClick={() => window.print()} className="px-3 py-2 rounded border hover:bg-gray-50 flex items-center gap-2"><Printer size={16} /> In hóa đơn</button>
+                  <button disabled={!CAN_DELETE(order.status)} onClick={onAskDelete} className={`px-3 py-2 rounded border flex items-center gap-2 ${CAN_DELETE(order.status) ? "text-red-600 border-red-200 hover:bg-red-50" : "text-gray-400 cursor-not-allowed"}`}><Trash2 size={16} /> Xóa đơn</button>
+                  <button onClick={_onClose} className="p-2 rounded hover:bg-gray-100"><X size={18} /></button>
                 </div>
               </div>
 
               <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="space-y-4">
                   <div className="border rounded-lg p-4">
-                    <div className="flex items-center gap-2 mb-2 font-medium">
-                      <User size={16} /> Khách hàng
-                    </div>
+                    <div className="flex items-center gap-2 mb-2 font-medium"><User size={16} /> Khách hàng</div>
                     <Line label="Họ tên" icon={User}>{order.name || order.user?.name || "Khách"}</Line>
                     <Line label="Email" icon={Mail}>{order.email || order.user?.email || "—"}</Line>
                     <Line label="Điện thoại" icon={Phone}>{order.phone || "—"}</Line>
                   </div>
-
                   <div className="border rounded-lg p-4">
-                    <div className="flex items-center gap-2 mb-2 font-medium">
-                      <MapPin size={16} /> Địa chỉ giao hàng
-                    </div>
+                    <div className="flex items-center gap-2 mb-2 font-medium"><MapPin size={16} /> Địa chỉ giao hàng</div>
                     <div className="text-sm">{order.address || "—"}</div>
-                    <button onClick={copyAddr} className="mt-2 inline-flex items-center gap-2 text-xs text-blue-600 hover:underline">
-                      <Copy size={14} /> Sao chép
-                    </button>
+                    <button onClick={copyAddr} className="mt-2 inline-flex items-center gap-2 text-xs text-blue-600 hover:underline"><Copy size={14} /> Sao chép</button>
                   </div>
-
                   <div className="border rounded-lg p-4">
-                    <div className="flex items-center gap-2 mb-2 font-medium">
-                      <DollarSign size={16} /> Thanh toán & vận chuyển
-                    </div>
+                    <div className="flex items-center gap-2 mb-2 font-medium"><DollarSign size={16} /> Thanh toán & vận chuyển</div>
                     <Line label="Thanh toán">{order.payment_method || "—"}</Line>
                     <Line label="Vận chuyển" icon={Truck}>{order.shipping_method || "—"}</Line>
                   </div>
@@ -493,9 +480,7 @@ function OrderDetailModal({ open, onClose, order, onAskDelete, addToast, updateT
 
                 <div className="lg:col-span-2 space-y-6">
                   <div className="border rounded-lg overflow-hidden">
-                    <div className="px-4 py-3 border-b font-medium flex items-center gap-2">
-                      <Package size={16} /> Sản phẩm
-                    </div>
+                    <div className="px-4 py-3 border-b font-medium flex items-center gap-2"><Package size={16} /> Sản phẩm</div>
                     <table className="w-full text-sm">
                       <thead className="bg-gray-50">
                         <tr>
@@ -550,10 +535,14 @@ function OrderDetailModal({ open, onClose, order, onAskDelete, addToast, updateT
 /* ============= Update Status Modal ============= */
 function UpdateStatusModal({ open, onClose, onSave, current, saving }) {
   const map = {
-    pending: ["processing", "canceled"],
-    processing: ["shipping", "canceled"],
-    shipping: ["shipped", "canceled"],
-    shipped: ["completed", "canceled"],
+    pending: ["paid", "processing", "canceled"],
+    paid: ["processing", "canceled"],
+    processing: ["shipping", "canceled", "refunded"],
+    shipping: ["shipped", "canceled", "refunded"],
+    shipped: ["completed", "refunded"],
+    completed: [],
+    canceled: [],
+    refunded: [],
   };
   const options = map[current] || [];
   const [status, setStatus] = useState(options[0] || "");
@@ -573,7 +562,7 @@ function UpdateStatusModal({ open, onClose, onSave, current, saving }) {
 
         {options.length === 0 ? (
           <div className="text-sm text-gray-500">
-            Đơn hàng đã hoàn tất hoặc bị huỷ, không thể thay đổi trạng thái.
+            Đơn hàng đã hoàn tất hoặc bị huỷ/refund, không thể thay đổi trạng thái.
           </div>
         ) : (
           <>
@@ -595,7 +584,9 @@ function UpdateStatusModal({ open, onClose, onSave, current, saving }) {
           <button
             disabled={options.length === 0 || saving}
             className={`px-4 py-2 rounded text-white ${
-              options.length === 0 || saving ? "bg-gray-400 cursor-not-allowed" : "bg-green-600 hover:bg-green-700"
+              options.length === 0 || saving
+                ? "bg-gray-400 cursor-not-allowed"
+                : "bg-green-600 hover:bg-green-700"
             }`}
             onClick={() => onSave(status, note)}
           >

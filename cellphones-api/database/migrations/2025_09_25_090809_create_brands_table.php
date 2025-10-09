@@ -5,22 +5,17 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration {
-public function up(): void
-{
-Schema::create('brands', function (Blueprint $table) {
-$table->id();
-$table->string('name');
-$table->string('slug')->unique();
-$table->string('logo_url')->nullable();
-$table->timestamps();
-});
-}
-
-    /**
-     * Reverse the migrations.
-     */
-    public function down(): void
-    {
-        Schema::dropIfExists('brands');
+    public function up(): void {
+        Schema::create('brands', function (Blueprint $table) {
+            $table->id();
+            $table->string('name',120);
+            $table->string('slug',160)->unique();
+            $table->string('logo')->nullable();      // lưu path storage/brands/...
+            $table->text('description')->nullable();
+            $table->boolean('is_active')->default(true);
+            $table->unsignedInteger('sort_order')->default(0);
+            $table->timestamps();
+        });
     }
+    public function down(): void { Schema::dropIfExists('brands'); }
 };

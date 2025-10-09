@@ -3,122 +3,110 @@
 namespace App\Http\Controllers\Api\V1\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Admin\ProductStoreRequest;
-use App\Http\Requests\Admin\ProductUpdateRequest;
 use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class AdminProductController extends Controller
 {
-    // ==============================
-    // 🔹 Lấy danh sách sản phẩm
-    // ==============================
+    /** GET /api/v1/admin/products */
     public function index(Request $request)
     {
         $q = Product::query()
-            ->select('id', 'name', 'price', 'sale_price', 'image_url', 'stock', 'created_at')
-            ->orderByDesc('id');
+            ->with(['brand:id,name', 'category:id,name'])
+            ->select('id','name','price','sale_price','stock','image_url','brand_id','category_id','created_at');
 
-        if ($kw = trim((string) $request->get('q', ''))) {
-            $q->where('name', 'like', "%{$kw}%");
+        if ($s = trim((string)$request->get('q'))) {
+            $q->where(function ($x) use ($s) {
+                $x->where('name', 'like', "%{$s}%")
+                  ->orWhere('slug', 'like', "%{$s}%");
+            });
         }
 
-        return response()->json(
-            $q->paginate((int) $request->get('per_page', 20))
-        );
+        if ($cid = $request->get('category_id')) $q->where('category_id', $cid);
+        if ($bid = $request->get('brand_id'))    $q->where('brand_id', $bid);
+
+        // sort đơn giản theo created_at desc
+        $q->latest('created_at');
+
+        $limit = (int) $request->get('limit', 15);
+        return $q->paginate(max(5, min($limit, 100)));
     }
 
-    // ==============================
-    // 🔹 Tạo mới sản phẩm
-    // ==============================
-    public function store(ProductStoreRequest $request)
-    {
-        $data = $request->validated();
-
-        if ($request->hasFile('image')) {
-            $path = $request->file('image')->store('products', 'public');
-            $data['image_url'] = asset('storage/' . $path);
-        }
-
-        $product = Product::create($data);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Tạo sản phẩm thành công',
-            'data' => $product
-        ], 201);
-    }
-
-    // ==============================
-    // 🔹 Xem chi tiết sản phẩm
-    // ==============================
+    /** GET /api/v1/admin/products/{id} */
     public function show($id)
     {
-        $product = Product::findOrFail($id);
-        return response()->json($product);
+        return Product::with(['brand:id,name', 'category:id,name'])->findOrFail($id);
     }
 
-    // ==============================
-    // 🔹 Cập nhật sản phẩm
-    // ==============================
-    public function update(ProductUpdateRequest $request, $id)
+    /** POST /api/v1/admin/products  (FormData) */
+    public function store(Request $request)
     {
-        $product = Product::findOrFail($id);
-        $data = $request->validated();
+        $data = $request->validate([
+            'name'        => ['required','string','max:255'],
+            'price'       => ['required','numeric','min:0'],
+            'sale_price'  => ['nullable','numeric','min:0'],
+            'stock'       => ['nullable','integer','min:0'],
+            'category_id' => ['nullable','exists:categories,id'],
+            'brand_id'    => ['nullable','exists:brands,id'],
+            'image'       => ['nullable','image','max:5120'], // 5MB
+        ]);
+
+        // slug tự sinh nếu thiếu
+        $data['slug'] = Str::slug($data['name']);
 
         if ($request->hasFile('image')) {
-            if ($product->image_url && str_contains($product->image_url, '/storage/')) {
-                $old = str_replace(asset('storage') . '/', '', $product->image_url);
-                Storage::disk('public')->delete($old);
-            }
-            $path = $request->file('image')->store('products', 'public');
-            $data['image_url'] = asset('storage/' . $path);
+            $path = $request->file('image')->store('products', 'public'); // products/abc.jpg
+            $data['image_url'] = "storage/{$path}";                       // FE dùng /storage/...
         }
 
-        $product->update($data);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Cập nhật sản phẩm thành công',
-            'data' => $product
-        ]);
+        $p = Product::create($data);
+        return response()->json($p->fresh(['brand:id,name', 'category:id,name']), 201);
     }
 
-    // ==============================
-    // 🔹 Xóa sản phẩm (có kiểm tra đơn hàng)
-    // ==============================
+    /** POST /api/v1/admin/products/{id}  (FormData) */
+    public function update($id, Request $request)
+    {
+        $p = Product::findOrFail($id);
+
+        $data = $request->validate([
+            'name'        => ['sometimes','string','max:255'],
+            'price'       => ['sometimes','numeric','min:0'],
+            'sale_price'  => ['nullable','numeric','min:0'],
+            'stock'       => ['sometimes','integer','min:0'],
+            'category_id' => ['nullable','exists:categories,id'],
+            'brand_id'    => ['nullable','exists:brands,id'],
+            'image'       => ['nullable','image','max:5120'],
+        ]);
+
+        if (!empty($data['name']) && empty($data['slug'])) {
+            $data['slug'] = Str::slug($data['name']);
+        }
+
+        if ($request->hasFile('image')) {
+            // xóa ảnh cũ nếu thuộc disk public
+            if ($p->image_url && str_starts_with($p->image_url, 'storage/')) {
+                $rel = Str::after($p->image_url, 'storage/'); // products/abc.jpg
+                Storage::disk('public')->delete($rel);
+            }
+            $path = $request->file('image')->store('products', 'public');
+            $data['image_url'] = "storage/{$path}";
+        }
+
+        $p->update($data);
+        return response()->json($p->fresh(['brand:id,name', 'category:id,name']));
+    }
+
+    /** DELETE /api/v1/admin/products/{id} */
     public function destroy($id)
     {
-        $product = Product::withCount('orderItems')->findOrFail($id);
-
-        // 🔒 Nếu sản phẩm đã có trong đơn hàng => Không cho xóa
-        if ($product->order_items_count > 0) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Không thể xóa sản phẩm vì đã tồn tại trong đơn hàng.',
-            ], 422);
+        $p = Product::findOrFail($id);
+        if ($p->image_url && str_starts_with($p->image_url, 'storage/')) {
+            $rel = Str::after($p->image_url, 'storage/');
+            Storage::disk('public')->delete($rel);
         }
-
-        try {
-            // Xóa ảnh nếu có
-            if ($product->image_url && str_contains($product->image_url, '/storage/')) {
-                $old = str_replace(asset('storage') . '/', '', $product->image_url);
-                Storage::disk('public')->delete($old);
-            }
-
-            $product->delete();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Xóa sản phẩm thành công.',
-            ]);
-        } catch (\Throwable $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Không thể xóa sản phẩm. Lỗi ràng buộc hoặc hệ thống.',
-                'error'   => $e->getMessage(),
-            ], 500);
-        }
+        $p->delete();
+        return response()->json(['deleted' => true]);
     }
 }

@@ -11,16 +11,18 @@ import {
   UsersIcon,
   Cog6ToothIcon,
   ArrowLeftOnRectangleIcon,
+  TagIcon,
 } from "@heroicons/react/24/outline";
 
 export default function AdminLayout() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false); // mobile sidebar
 
+  // ⬇️ Đăng xuất và quay về trang chủ
   const logout = () => {
     localStorage.removeItem("admin_token");
     localStorage.removeItem("isAdmin");
-    navigate("/admin/login");
+    navigate("/"); // về Home
   };
 
   const itemClass = ({ isActive }) =>
@@ -51,6 +53,11 @@ export default function AdminLayout() {
         Danh mục
       </NavLink>
 
+      <NavLink to="/admin/brands" className={itemClass}>
+        <TagIcon className="h-5 w-5 text-gray-600" />
+        Thương hiệu
+      </NavLink>
+
       <NavLink to="/admin/orders" className={itemClass}>
         <ShoppingBagIcon className="h-5 w-5 text-gray-600" />
         Đơn hàng
@@ -65,7 +72,6 @@ export default function AdminLayout() {
         Hệ thống
       </div>
 
-      {/* ⚙️ Cài đặt hệ thống */}
       <NavLink to="/admin/settings" className={itemClass}>
         <Cog6ToothIcon className="h-5 w-5 text-gray-600" />
         Cài đặt
@@ -80,7 +86,7 @@ export default function AdminLayout() {
         className="flex items-center gap-2 w-full text-left text-red-600 hover:bg-gray-100 px-3 py-2 rounded-lg"
       >
         <ArrowLeftOnRectangleIcon className="h-5 w-5" />
-        Đăng xuất
+        Trang chủ
       </button>
       <div className="mt-3 text-[11px] text-gray-400 px-1">
         Admin Panel • v1.0
@@ -149,7 +155,6 @@ export default function AdminLayout() {
 
           {/* Main content */}
           <main className="flex-1 min-w-0 lg:mt-4">
-            {/* Page wrapper */}
             <div className="bg-white border rounded-2xl shadow-sm p-4 lg:p-6">
               <Outlet />
             </div>

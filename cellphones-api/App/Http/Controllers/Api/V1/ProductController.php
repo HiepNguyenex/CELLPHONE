@@ -18,14 +18,14 @@ class ProductController extends Controller
     {
         $query = Product::query()
             ->with(['brand:id,name', 'category:id,name,slug'])
-            ->select('id','name','price','sale_price','image_url','stock','category_id','brand_id','created_at');
+            ->select('id', 'name', 'price', 'sale_price', 'image_url', 'stock', 'category_id', 'brand_id', 'created_at');
 
         /* ========== Search (keyword or q) ========== */
-        $search = trim((string) $request->get('search', $request->get('q','')));
+        $search = trim((string) $request->get('search', $request->get('q', '')));
         if ($search !== '') {
             $query->where(function (Builder $q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('description', 'like', "%{$search}%");
+                    ->orWhere('description', 'like', "%{$search}%");
             });
         }
 
@@ -53,8 +53,17 @@ class ProductController extends Controller
             }
         }
 
+        // ⚡ SỬA: lọc theo thương hiệu (brand_id / brand_ids)
         if ($brandIds = $parseList($request->get('brand_id', $request->get('brand_ids')))) {
             $query->whereIn('brand_id', $brandIds);
+        }
+
+        // ⚡ THÊM: cho phép lọc theo slug thương hiệu (brand_slug)
+        if ($brandSlugs = $request->get('brand_slug', $request->get('brand_slugs'))) {
+            $slugs = is_array($brandSlugs) ? $brandSlugs : array_map('trim', explode(',', $brandSlugs));
+            $query->whereHas('brand', function ($q) use ($slugs) {
+                $q->whereIn('slug', $slugs);
+            });
         }
 
         // Khoảng giá (price_min, price_max)
@@ -105,7 +114,7 @@ class ProductController extends Controller
      */
     public function show($idOrSlug)
     {
-        $product = Product::with(['brand:id,name', 'category:id,name,slug'])
+        $product = Product::with(['brand:id,name,slug', 'category:id,name,slug'])
             ->when(is_numeric($idOrSlug),
                 fn($q) => $q->where('id', $idOrSlug),
                 fn($q) => $q->where('slug', $idOrSlug)

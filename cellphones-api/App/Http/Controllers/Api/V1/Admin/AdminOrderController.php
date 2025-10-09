@@ -8,7 +8,6 @@ use App\Models\OrderStatusHistory;
 use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\View;
 use Illuminate\Validation\Rule;
 use Barryvdh\DomPDF\Facade\Pdf;
 use App\Events\OrderStatusChanged;
@@ -55,14 +54,14 @@ class AdminOrderController extends Controller
 
     /**
      * POST /api/v1/admin/orders/{id}/status
-     * ✅ Cập nhật trạng thái + hoàn kho (nếu huỷ) + ghi lịch sử + event
+     * ✅ Cập nhật trạng thái + hoàn kho (nếu huỷ/refund) + ghi lịch sử + event
      */
     public function updateStatus(Request $r, $id)
     {
         $data = $r->validate([
             'status' => [
                 'required',
-                Rule::in(['pending','processing','shipping','shipped','completed','canceled']),
+                Rule::in(['pending','paid','processing','shipping','shipped','completed','canceled','refunded']),
             ],
             'note'   => ['nullable','string','max:1000'],
         ]);
@@ -73,12 +72,14 @@ class AdminOrderController extends Controller
 
         // Ràng buộc luồng hợp lệ
         $map = [
-            'pending'    => ['processing','canceled'],
-            'processing' => ['shipping','canceled'],
-            'shipping'   => ['shipped','canceled'],
-            'shipped'    => ['completed','canceled'],
+            'pending'    => ['paid','processing','canceled'],
+            'paid'       => ['processing','canceled','refunded'],
+            'processing' => ['shipping','canceled','refunded'],
+            'shipping'   => ['shipped','canceled','refunded'],
+            'shipped'    => ['completed','refunded'],
             'completed'  => [],
             'canceled'   => [],
+            'refunded'   => [],
         ];
 
         if (!in_array($to, $map[$from] ?? [])) {
@@ -89,13 +90,12 @@ class AdminOrderController extends Controller
         }
 
         DB::transaction(function () use ($order, $r, $from, $to, $data) {
-
             // ✅ Cập nhật trạng thái đơn
             $order->status = $to;
             $order->save();
 
-            // ✅ Hoàn kho nếu huỷ đơn
-            if ($from !== 'canceled' && $to === 'canceled') {
+            // ✅ Hoàn kho nếu huỷ/refunded
+            if (!in_array($from, ['canceled','refunded']) && in_array($to, ['canceled','refunded'])) {
                 $order->loadMissing('items');
                 foreach ($order->items as $it) {
                     Product::whereKey($it->product_id)->increment('stock', $it->qty);
@@ -111,7 +111,7 @@ class AdminOrderController extends Controller
                 'note'        => $data['note'] ?? null,
             ]);
 
-            // ✅ Gửi event cho email / listener
+            // ✅ Gửi event cho listener/email
             OrderStatusChanged::dispatch($order, $from, $to, $data['note'] ?? null);
         });
 
