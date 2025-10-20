@@ -12,13 +12,24 @@ import { Plus, Edit, Trash, Search, X } from "lucide-react";
 import { Dialog } from "@headlessui/react";
 import ConfirmDialog from "../components/ConfirmDialog";
 
+// ===== ORIGIN helper (chuẩn với mọi kiểu VITE_API_URL: /api, /api/v1, ...)
+const API_BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000/api";
+const ORIGIN = (() => {
+  try {
+    return new URL(API_BASE, window.location.origin).origin;
+  } catch {
+    return API_BASE.replace(/\/api(?:\/v\d+)?\/?$/i, "").replace(/\/+$/, "");
+  }
+})();
+
 // ── Helper: format tiền & ảnh
 const money = (v) => `${(Number(v) || 0).toLocaleString("vi-VN")}₫`;
-const img = (urlOrPath) => {
-  if (!urlOrPath) return "https://dummyimage.com/64x64/eeeeee/000000&text=IMG";
-  if (/^https?:\/\//i.test(urlOrPath)) return urlOrPath;
-  const base = (import.meta.env.VITE_API_URL || "http://127.0.0.1:8000/api").replace(/\/api$/, "");
-  return `${base}/${urlOrPath.startsWith("storage") ? urlOrPath : `storage/${urlOrPath}`}`;
+const img = (u) => {
+  if (!u) return "https://dummyimage.com/64x64/eeeeee/000000&text=IMG";
+  if (/^https?:\/\//i.test(u)) return u; // đã là URL tuyệt đối
+  const path = String(u).replace(/^\/+/, "");
+  const rel = path.startsWith("storage/") ? path : `storage/${path}`;
+  return `${ORIGIN}/${rel}`; // http://127.0.0.1:8000/storage/...
 };
 
 const emptyForm = {
@@ -423,29 +434,29 @@ export default function ProductsAdmin() {
                 </div>
                 <div className="mt-2 space-y-2">
                   {form.specs.map((row, idx) => (
-  <div key={idx} className="grid grid-cols-12 gap-2">
-    <input
-      className="border rounded px-2 py-1 col-span-5"
-      placeholder="Thuộc tính (vd. Màn hình)"
-      value={row.key}
-      onChange={(e) => updateSpec(idx, "key", e.target.value)}
-    />
-    <input
-      className="border rounded px-2 py-1 col-span-6"
-      placeholder={'Giá trị (vd. 6.1")'} // ✅ dùng nháy đơn để tránh lỗi JSX
-      value={row.value}
-      onChange={(e) => updateSpec(idx, "value", e.target.value)}
-    />
-    <button
-      type="button"
-      className="col-span-1 flex items-center justify-center border rounded hover:bg-gray-50"
-      onClick={() => removeSpec(idx)}
-      title="Xoá dòng"
-    >
-      <X size={16} />
-    </button>
-  </div>
-))}
+                    <div key={idx} className="grid grid-cols-12 gap-2">
+                      <input
+                        className="border rounded px-2 py-1 col-span-5"
+                        placeholder="Thuộc tính (vd. Màn hình)"
+                        value={row.key}
+                        onChange={(e) => updateSpec(idx, "key", e.target.value)}
+                      />
+                      <input
+                        className="border rounded px-2 py-1 col-span-6"
+                        placeholder={'Giá trị (vd. 6.1")'}
+                        value={row.value}
+                        onChange={(e) => updateSpec(idx, "value", e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="col-span-1 flex items-center justify-center border rounded hover:bg-gray-50"
+                        onClick={() => removeSpec(idx)}
+                        title="Xoá dòng"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  ))}
 
                   {form.specs.length === 0 && (
                     <div className="text-sm text-gray-500">Chưa có dòng nào. Nhấn “+ Thêm dòng”.</div>

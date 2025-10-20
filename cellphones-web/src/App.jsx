@@ -33,11 +33,22 @@ import UsersAdmin from "./admin/UsersAdmin";
 import CategoriesAdmin from "./admin/CategoriesAdmin";
 import SettingsAdmin from "./admin/SettingsAdmin";
 import BrandsAdmin from "./admin/BrandsAdmin";
+import AdminReviews from "./admin/AdminReviews";
+import CouponsAdmin from "./admin/CouponsAdmin"; // ⬅️ NEW
+import BundlesAdmin from "./admin/BundlesAdmin";
+import StoresAdmin from "./admin/StoresAdmin";
+import InventoriesAdmin from "./admin/InventoriesAdmin";
+import WarrantyPlansAdmin from "./admin/WarrantyPlansAdmin";
+import InstallmentsAdmin from "./admin/InstallmentsAdmin";
 
 import AuthProvider from "./context/AuthContext";
 import RequireAuth from "./components/RequireAuth";
 import { WishlistProvider } from "./context/WishlistContext";
 import { ToastProvider } from "./components/Toast";
+import { CompareProvider } from "./context/CompareContext";
+import { ViewedProvider } from "./context/ViewedContext";
+
+import Compare from "./pages/Compare";
 
 export default function App() {
   const location = useLocation();
@@ -47,96 +58,113 @@ export default function App() {
     <AuthProvider>
       <ToastProvider>
         <WishlistProvider>
-          {!isAdminRoute && (
-            <>
-              <Topbar />
-              <Navbar />
-            </>
-          )}
+          <CompareProvider>
+            <ViewedProvider>
+              {!isAdminRoute && (
+                <>
+                  <Topbar />
+                  <Navbar />
+                </>
+              )}
 
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/about" element={<About />} />
-            <Route path="/contact" element={<Contact />} />
-            <Route path="/blog" element={<Blog />} />
-            <Route path="/article/:id" element={<Article />} />
-            <Route path="/faq" element={<FAQ />} />
-            <Route path="/product/:id" element={<ProductDetail />} />
-            <Route path="/search" element={<Search />} />
-            <Route
-              path="/wishlist"
-              element={
-                <RequireAuth>
-                  <Wishlist />
-                </RequireAuth>
-              }
-            />
-            <Route path="/cart" element={<Cart />} />
-            <Route path="/checkout" element={<Checkout />} />
-            <Route path="/thankyou" element={<ThankYou />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/password-reset" element={<PasswordReset />} />
+              <Routes>
+                <Route path="/" element={<Home />} />
+                <Route path="/about" element={<About />} />
+                <Route path="/contact" element={<Contact />} />
+                <Route path="/blog" element={<Blog />} />
+                <Route path="/article/:id" element={<Article />} />
+                <Route path="/faq" element={<FAQ />} />
+                <Route path="/product/:id" element={<ProductDetail />} />
+                <Route path="/search" element={<Search />} />
 
-            {/* USER AUTH */}
-            <Route
-              path="/my-account"
-              element={
-                <RequireAuth>
-                  <MyAccount />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/orders"
-              element={
-                <RequireAuth>
-                  <Orders />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/order/:id"
-              element={
-                <RequireAuth>
-                  <OrderDetail />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/password-change"
-              element={
-                <RequireAuth>
-                  <PasswordChange />
-                </RequireAuth>
-              }
-            />
+                {/* So sánh */}
+                <Route path="/compare" element={<Compare />} />
 
-            <Route path="/terms" element={<Terms />} />
-            <Route path="/privacy" element={<Privacy />} />
+                <Route
+                  path="/wishlist"
+                  element={
+                    <RequireAuth>
+                      <Wishlist />
+                    </RequireAuth>
+                  }
+                />
+                <Route path="/cart" element={<Cart />} />
+                <Route path="/checkout" element={<Checkout />} />
+                <Route path="/thankyou" element={<ThankYou />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
+                <Route path="/password-reset" element={<PasswordReset />} />
 
-            {/* ADMIN */}
-            <Route
-              path="/admin"
-              element={
-                <RequireAuth requireAdmin>
-                  <AdminLayout />
-                </RequireAuth>
-              }
-            >
-              <Route index element={<Dashboard />} />
-              <Route path="products" element={<ProductsAdmin />} />
-              <Route path="categories" element={<CategoriesAdmin />} />
-              <Route path="brands" element={<BrandsAdmin />} />
-              <Route path="orders" element={<OrdersAdmin />} />
-              <Route path="users" element={<UsersAdmin />} />
-              <Route path="settings" element={<SettingsAdmin />} />
-            </Route>
+                {/* USER AUTH */}
+                <Route
+                  path="/my-account"
+                  element={
+                    <RequireAuth>
+                      <MyAccount />
+                    </RequireAuth>
+                  }
+                />
+                <Route
+                  path="/orders"
+                  element={
+                    <RequireAuth>
+                      <Orders />
+                    </RequireAuth>
+                  }
+                />
+                <Route
+                  path="/order/:id"
+                  element={
+                    <RequireAuth>
+                      <OrderDetail />
+                    </RequireAuth>
+                  }
+                />
+                <Route
+                  path="/password-change"
+                  element={
+                    <RequireAuth>
+                      <PasswordChange />
+                    </RequireAuth>
+                  }
+                />
 
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+                <Route path="/terms" element={<Terms />} />
+                <Route path="/privacy" element={<Privacy />} />
 
-          {!isAdminRoute && <Footer />}
+                {/* ADMIN */}
+                <Route
+                  path="/admin"
+                  element={
+                    <RequireAuth requireAdmin>
+                      <AdminLayout />
+                    </RequireAuth>
+                  }
+                >
+                  <Route index element={<Dashboard />} />
+                  <Route path="products" element={<ProductsAdmin />} />
+                  <Route path="categories" element={<CategoriesAdmin />} />
+                  <Route path="brands" element={<BrandsAdmin />} />
+                  <Route path="orders" element={<OrdersAdmin />} />
+                  <Route path="users" element={<UsersAdmin />} />
+                  <Route path="settings" element={<SettingsAdmin />} />
+                  <Route path="reviews" element={<AdminReviews />} />
+                  <Route path="coupons" element={<CouponsAdmin />} /> {/* ⬅️ NEW */}
+
+                    {/* --- NEW --- */}
+                  <Route path="bundles" element={<BundlesAdmin />} />
+                  <Route path="stores" element={<StoresAdmin />} />
+                  <Route path="inventories" element={<InventoriesAdmin />} />
+                  <Route path="warranty-plans" element={<WarrantyPlansAdmin />} />
+                  <Route path="installments" element={<InstallmentsAdmin />} />
+                </Route>
+
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+
+              {!isAdminRoute && <Footer />}
+            </ViewedProvider>
+          </CompareProvider>
         </WishlistProvider>
       </ToastProvider>
     </AuthProvider>

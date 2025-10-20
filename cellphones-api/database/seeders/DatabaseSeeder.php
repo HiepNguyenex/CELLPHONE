@@ -15,6 +15,12 @@ class DatabaseSeeder extends Seeder
             CategorySeeder::class,
             AdminUserSeeder::class,
             BrandSeeder::class,
+            CouponSeeder::class,
+            ProductImageSeeder::class,
+             ProductVariantSeeder::class,
+             ProductBundleSeeder::class,
+             StoreSeeder::class,
+             WarrantyPlanSeeder::class,
         ]);
     }
 }

@@ -21,52 +21,80 @@ class Product extends Model
         'stock',
         'is_featured',
         'specs',
+        'promotions',
         'short_description',
         'description',
     ];
 
     protected $casts = [
-        'specs' => 'array',
+        'specs'       => 'array',
+        'promotions'  => 'array',
         'is_featured' => 'boolean',
     ];
 
-    protected $appends = ['final_price'];
+    protected $appends = ['final_price']; // có thể thêm 'image_absolute_url' nếu muốn xuất ra FE
 
     // ==============================
-    // 🔹 Quan hệ
+    // Quan hệ
     // ==============================
-    public function category()
+    public function category()     { return $this->belongsTo(Category::class); }
+    public function brand()        { return $this->belongsTo(Brand::class); }
+    public function orderItems()   { return $this->hasMany(OrderItem::class); }
+    public function reviews()      { return $this->hasMany(Review::class); }
+    public function flashSale()    { return $this->hasOne(FlashSale::class); }
+    public function images()       { return $this->hasMany(ProductImage::class)->orderBy('is_primary','desc')->orderBy('position')->orderBy('id'); }
+    public function variants()     { return $this->hasMany(ProductVariant::class)->orderByDesc('is_default')->orderBy('id'); }
+
+    // Bundles (pivot product_bundle)
+    public function bundles()
     {
-        return $this->belongsTo(Category::class);
+        return $this->belongsToMany(Product::class, 'product_bundle', 'product_id', 'bundle_product_id')
+            ->withPivot(['discount_percent', 'is_active'])
+            ->withTimestamps();
     }
 
-    public function brand()
+    public function includedInBundles()
     {
-        return $this->belongsTo(Brand::class);
+        return $this->belongsToMany(Product::class, 'product_bundle', 'bundle_product_id', 'product_id')
+            ->withPivot(['discount_percent', 'is_active'])
+            ->withTimestamps();
     }
 
-    public function orderItems()
+    // Store & tồn kho
+    public function inventories()  { return $this->hasMany(Inventory::class); }
+    public function stores()
     {
-        return $this->hasMany(OrderItem::class);
+        return $this->belongsToMany(Store::class, 'inventories', 'product_id', 'store_id')
+            ->withPivot(['stock'])
+            ->withTimestamps();
     }
+
+    // Gói bảo hành
+    public function warrantyPlans() { return $this->hasMany(WarrantyPlan::class); }
 
     // ==============================
-    // 🔹 Accessors
+    // Accessors
     // ==============================
     public function getFinalPriceAttribute(): int
     {
         return (int) ($this->sale_price ?? $this->price);
     }
 
+    // (tuỳ chọn) URL tuyệt đối nếu sau này cần
+    public function getImageAbsoluteUrlAttribute(): ?string
+    {
+        if (!$this->image_url) return null;
+        if (Str::startsWith($this->image_url, ['http://','https://'])) return $this->image_url;
+        return asset($this->image_url);
+    }
+
     // ==============================
-    // 🔹 Sự kiện tự động
+    // Hook sinh slug
     // ==============================
     protected static function booted()
     {
         static::creating(function (Product $p) {
-            if (empty($p->slug)) {
-                $p->slug = static::uniqueSlug($p->name);
-            }
+            if (empty($p->slug)) $p->slug = static::uniqueSlug($p->name);
         });
 
         static::updating(function (Product $p) {
@@ -76,27 +104,28 @@ class Product extends Model
         });
     }
 
-    /** 🔹 Sinh slug duy nhất */
     protected static function uniqueSlug(string $name, ?int $ignoreId = null): string
     {
         $base = Str::slug($name) ?: 'sp';
         $slug = $base;
         $i = 1;
 
-        $query = static::where('slug', $slug);
-        if ($ignoreId) $query->where('id', '!=', $ignoreId);
+        $exists = static::where('slug', $slug)
+            ->when($ignoreId, fn($q) => $q->where('id', '!=', $ignoreId))
+            ->exists();
 
-        while ($query->exists()) {
+        while ($exists) {
             $slug = $base . '-' . $i++;
-            $query = static::where('slug', $slug);
-            if ($ignoreId) $query->where('id', '!=', $ignoreId);
+            $exists = static::where('slug', $slug)
+                ->when($ignoreId, fn($q) => $q->where('id', '!=', $ignoreId))
+                ->exists();
         }
 
         return $slug;
     }
 
     // ==============================
-    // 🔹 Query Scopes (lọc / sắp xếp)
+    // Scopes
     // ==============================
     public function scopeKeyword($q, $kw)
     {
@@ -133,7 +162,7 @@ class Product extends Model
             'price_asc'  => $q->orderBy('price', 'asc'),
             'price_desc' => $q->orderBy('price', 'desc'),
             'newest'     => $q->orderBy('id', 'desc'),
-            default       => $q->orderBy('id', 'desc'),
+            default      => $q->orderBy('id', 'desc'),
         };
     }
 }

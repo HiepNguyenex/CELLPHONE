@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\Product;
+use App\Models\FlashSale;
+use App\Models\Coupon; // ✅ THÊM
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -13,7 +15,9 @@ use App\Events\OrderStatusChanged;
 
 class OrderController extends Controller
 {
-    // 🧹 GIỮ NGUYÊN - POST /api/v1/checkout/quote
+    // ========================
+    // 🧮 BÁO GIÁ TRƯỚC CHECKOUT
+    // ========================
     public function quote(Request $request)
     {
         $data = $request->validate([
@@ -29,24 +33,53 @@ class OrderController extends Controller
 
         $subtotal = 0;
         foreach ($data['items'] as $r) {
-            $subtotal += (int)$products[$r['id']]->price * (int)$r['qty'];
+            $product = $products[$r['id']];
+            $price = $product->price;
+
+            // ⚡ Áp dụng Flash Sale nếu đang hoạt động
+            $flash = FlashSale::where('product_id', $product->id)
+                ->where('start_time', '<=', now())
+                ->where('end_time', '>=', now())
+                ->first();
+
+            if ($flash) {
+                $price = $price * (1 - $flash->discount_percent / 100);
+            }
+
+            $subtotal += (int)$price * (int)$r['qty'];
         }
 
         $method   = $data['shipping_method'] ?? 'standard';
         $shipping = $method === 'express' ? 50000 : 30000;
         if ($subtotal >= 2000000) $shipping = 0;
 
+        // ✅ Dùng bảng coupons
         $discount = 0;
-        if (!empty($data['coupon']) && strtoupper($data['coupon']) === 'SALE10') {
-            $discount = min((int)round($subtotal * 0.10), 200000);
+        $couponCode = null;
+        if (!empty($data['coupon'])) {
+            $coupon = Coupon::where('code', strtoupper($data['coupon']))->first();
+            if (!$coupon || !$coupon->isValid()) {
+                return response()->json(['message' => 'Mã giảm giá không hợp lệ hoặc đã hết hạn.'], 422);
+            }
+            // Giảm theo % trên subtotal (không áp shipping)
+            $discount = (int) round($subtotal * ($coupon->discount / 100));
+            $couponCode = $coupon->code;
         }
 
         $total = max($subtotal + $shipping - $discount, 0);
 
-        return response()->json(compact('subtotal','shipping','discount','total'));
+        return response()->json([
+            'subtotal'    => $subtotal,
+            'shipping'    => $shipping,
+            'discount'    => $discount,
+            'total'       => $total,
+            'coupon_code' => $couponCode,
+        ]);
     }
 
-    // ⚡ SỬA - POST /api/v1/orders (tích hợp VNPay)
+    // ========================
+    // 🧾 TẠO ĐƠN HÀNG MỚI
+    // ========================
     public function store(Request $request)
     {
         $data = $request->validate([
@@ -60,7 +93,7 @@ class OrderController extends Controller
             'address' => ['required','string','max:500'],
 
             'shipping_method' => ['required', Rule::in(['standard','express'])],
-            'payment_method'  => ['required', Rule::in(['cod','vnpay'])], // ⚡ SỬA - thêm vnpay
+            'payment_method'  => ['required', Rule::in(['cod','vnpay'])],
             'coupon'          => ['nullable','string','max:50'],
             'note'            => ['nullable','string','max:500'],
         ]);
@@ -79,8 +112,19 @@ class OrderController extends Controller
             foreach ($data['items'] as $row) {
                 $p    = $products[$row['id']];
                 $qty  = (int)$row['qty'];
-                $price= (int)$p->price;
 
+                // ⚡ Áp dụng Flash Sale nếu đang có
+                $price = $p->price;
+                $flash = FlashSale::where('product_id', $p->id)
+                    ->where('start_time', '<=', now())
+                    ->where('end_time', '>=', now())
+                    ->first();
+
+                if ($flash) {
+                    $price = $price * (1 - $flash->discount_percent / 100);
+                }
+
+                // Giảm tồn kho
                 $affected = Product::where('id', $p->id)
                     ->where('stock','>=',$qty)
                     ->decrement('stock', $qty);
@@ -90,6 +134,7 @@ class OrderController extends Controller
                 }
 
                 $subtotal += $price * $qty;
+
                 $rows[] = [
                     'product_id' => $p->id,
                     'name'       => $p->name,
@@ -105,9 +150,17 @@ class OrderController extends Controller
             $shipping = $method === 'express' ? 50000 : 30000;
             if ($subtotal >= 2000000) $shipping = 0;
 
-            $discount = 0;
-            if (!empty($data['coupon']) && strtoupper($data['coupon']) === 'SALE10') {
-                $discount = min((int)round($subtotal * 0.10), 200000);
+            // ✅ Coupon từ DB: tính discount & trừ lượt dùng
+            $discount   = 0;
+            $couponCode = null;
+            $coupon     = null;
+            if (!empty($data['coupon'])) {
+                $coupon = Coupon::where('code', strtoupper($data['coupon']))->lockForUpdate()->first();
+                if (!$coupon || !$coupon->isValid()) {
+                    return response()->json(['message' => 'Mã giảm giá không hợp lệ hoặc đã hết hạn.'], 422);
+                }
+                $discount   = (int) round($subtotal * ($coupon->discount / 100));
+                $couponCode = $coupon->code;
             }
 
             $total = max($subtotal + $shipping - $discount, 0);
@@ -126,19 +179,25 @@ class OrderController extends Controller
                 'total'           => $total,
                 'status'          => 'pending',
                 'note'            => $data['note'] ?? null,
-                'payment_method'  => $data['payment_method'], // cod | vnpay
-                'payment_status'  => 'unpaid',                // ✅ THÊM - cần có cột này
+                'payment_method'  => $data['payment_method'],
+                'payment_status'  => 'unpaid',
                 'shipping_method' => $method,
+                'coupon_code'     => $couponCode, // ✅ mới
             ]);
 
             $order->items()->createMany($rows);
 
-            // ✅ Bổ sung phần tạo URL thanh toán VNPay nếu chọn VNPay
+            // ✅ nếu có coupon thì trừ lượt dùng
+            if ($coupon) {
+                $coupon->markUsed();
+            }
+
             $resp = [
                 'message' => 'Đặt hàng thành công',
                 'order'   => $order->load('items'),
             ];
 
+            // Nếu thanh toán VNPay
             if ($order->payment_method === 'vnpay') {
                 $params = [
                     'vnp_Version'    => '2.1.0',
@@ -156,7 +215,6 @@ class OrderController extends Controller
                     'vnp_ExpireDate' => now()->addMinutes(15)->format('YmdHis'),
                 ];
 
-                // Gọi service để tạo link thanh toán
                 $resp['pay_url'] = \App\Services\VNPay::createPaymentUrl($params);
             }
 
@@ -164,7 +222,9 @@ class OrderController extends Controller
         });
     }
 
-    // 🧹 GIỮ NGUYÊN - HỦY ĐƠN HÀNG
+    // ========================
+    // 🛑 HỦY ĐƠN HÀNG
+    // ========================
     public function cancel(Request $request, $id)
     {
         $order = Order::with('items')
@@ -193,7 +253,9 @@ class OrderController extends Controller
         return response()->json(['success' => true]);
     }
 
-    // 🧹 GIỮ NGUYÊN - GET /api/v1/orders
+    // ========================
+    // 📦 LẤY DANH SÁCH ĐƠN
+    // ========================
     public function index(Request $request)
     {
         $orders = $request->user()
@@ -205,7 +267,9 @@ class OrderController extends Controller
         return response()->json($orders);
     }
 
-    // 🧹 GIỮ NGUYÊN - GET /api/v1/orders/{id}
+    // ========================
+    // 📄 CHI TIẾT ĐƠN HÀNG
+    // ========================
     public function show(Request $request, $id)
     {
         $order = $request->user()
@@ -216,5 +280,3 @@ class OrderController extends Controller
         return response()->json($order);
     }
 }
-
-// === KẾT FILE: app/Http/Controllers/Api/V1/OrderController.php ===

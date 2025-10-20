@@ -27,7 +27,6 @@ class AdminProductController extends Controller
         if ($cid = $request->get('category_id')) $q->where('category_id', $cid);
         if ($bid = $request->get('brand_id'))    $q->where('brand_id', $bid);
 
-        // sort đơn giản theo created_at desc
         $q->latest('created_at');
 
         $limit = (int) $request->get('limit', 15);
@@ -40,7 +39,7 @@ class AdminProductController extends Controller
         return Product::with(['brand:id,name', 'category:id,name'])->findOrFail($id);
     }
 
-    /** POST /api/v1/admin/products  (FormData) */
+    /** POST /api/v1/admin/products (FormData) */
     public function store(Request $request)
     {
         $data = $request->validate([
@@ -50,22 +49,35 @@ class AdminProductController extends Controller
             'stock'       => ['nullable','integer','min:0'],
             'category_id' => ['nullable','exists:categories,id'],
             'brand_id'    => ['nullable','exists:brands,id'],
-            'image'       => ['nullable','image','max:5120'], // 5MB
+            'specs'       => ['nullable'],
+            // Ảnh:
+            'image'       => ['nullable','image','mimes:jpg,jpeg,png','max:5120'], // ⚡ SỬA
+            'image_url'   => ['nullable','url'],                                    // ✅ THÊM
         ]);
 
-        // slug tự sinh nếu thiếu
+        // specs có thể là JSON string
+        if (is_string($request->specs)) {
+            $decoded = json_decode($request->specs, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $data['specs'] = $decoded;
+            }
+        }
+
         $data['slug'] = Str::slug($data['name']);
 
+        // ✅ NHẬN CẢ 2 TRƯỜNG HỢP: FILE hoặc URL
         if ($request->hasFile('image')) {
-            $path = $request->file('image')->store('products', 'public'); // products/abc.jpg
-            $data['image_url'] = "storage/{$path}";                       // FE dùng /storage/...
+            $path = $request->file('image')->store('products', 'public');
+            $data['image_url'] = "storage/{$path}";
+        } elseif ($request->filled('image_url')) {
+            $data['image_url'] = $request->input('image_url');
         }
 
         $p = Product::create($data);
         return response()->json($p->fresh(['brand:id,name', 'category:id,name']), 201);
     }
 
-    /** POST /api/v1/admin/products/{id}  (FormData) */
+    /** POST /api/v1/admin/products/{id} (FormData) */
     public function update($id, Request $request)
     {
         $p = Product::findOrFail($id);
@@ -77,21 +89,34 @@ class AdminProductController extends Controller
             'stock'       => ['sometimes','integer','min:0'],
             'category_id' => ['nullable','exists:categories,id'],
             'brand_id'    => ['nullable','exists:brands,id'],
-            'image'       => ['nullable','image','max:5120'],
+            'specs'       => ['nullable'],
+            // Ảnh:
+            'image'       => ['nullable','image','mimes:jpg,jpeg,png','max:5120'], // ⚡ SỬA
+            'image_url'   => ['nullable','url'],                                    // ✅ THÊM
         ]);
+
+        if (is_string($request->specs)) {
+            $decoded = json_decode($request->specs, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $data['specs'] = $decoded;
+            }
+        }
 
         if (!empty($data['name']) && empty($data['slug'])) {
             $data['slug'] = Str::slug($data['name']);
         }
 
+        // ✅ Ưu tiên file; nếu không có file nhưng có URL thì cập nhật URL
         if ($request->hasFile('image')) {
-            // xóa ảnh cũ nếu thuộc disk public
+            // dọn ảnh cũ nếu là file local
             if ($p->image_url && str_starts_with($p->image_url, 'storage/')) {
-                $rel = Str::after($p->image_url, 'storage/'); // products/abc.jpg
+                $rel = Str::after($p->image_url, 'storage/');
                 Storage::disk('public')->delete($rel);
             }
             $path = $request->file('image')->store('products', 'public');
             $data['image_url'] = "storage/{$path}";
+        } elseif ($request->filled('image_url')) {
+            $data['image_url'] = $request->input('image_url');
         }
 
         $p->update($data);

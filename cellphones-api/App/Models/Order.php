@@ -12,22 +12,20 @@ class Order extends Model
     protected $fillable = [
         'user_id','code','name','email','phone','address',
         'subtotal','shipping','discount','total','status',
-        'note','payment_method','shipping_method',
+        'note','payment_method','shipping_method','payment_status',
+        'coupon_code', // ✅ THÊM
     ];
 
-    // Quan hệ 1-nhiều tới OrderItem
     public function items()
     {
         return $this->hasMany(OrderItem::class);
     }
 
-    // ✅ Quan hệ 1-nhiều tới OrderStatusHistory (để hiển thị lịch sử)
     public function histories()
     {
         return $this->hasMany(OrderStatusHistory::class)->latest();
     }
 
-    // ✅ Tự sinh mã đơn hàng nếu chưa có
     protected static function booted(): void
     {
         static::creating(function (self $order) {

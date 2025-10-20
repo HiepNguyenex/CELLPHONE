@@ -10,9 +10,17 @@ use App\Http\Controllers\Api\V1\BannerController;
 use App\Http\Controllers\Api\V1\OrderController;
 use App\Http\Controllers\Api\V1\FaqController;
 use App\Http\Controllers\Api\V1\WishlistController;
-use App\Http\Controllers\Api\V1\SettingController;               // Public Settings
+use App\Http\Controllers\Api\V1\SettingController;
 use App\Http\Controllers\AuthController;
-use App\Http\Controllers\Api\V1\BrandController;                  // ✅ THÊM
+use App\Http\Controllers\Api\V1\BrandController;
+use App\Http\Controllers\Api\V1\ReviewController;
+use App\Http\Controllers\Api\V1\FlashSaleController;
+
+// ===== Bổ sung các controller PUBLIC mới =====
+use App\Http\Controllers\Api\V1\InstallmentController;
+use App\Http\Controllers\Api\V1\StoreController;
+use App\Http\Controllers\Api\V1\WarrantyController;
+use App\Http\Controllers\Api\V1\ProductBundleController;
 
 // ===== Controllers Admin =====
 use App\Http\Controllers\Api\V1\Admin\AdminAuthController;
@@ -21,62 +29,109 @@ use App\Http\Controllers\Api\V1\Admin\AdminCategoryController;
 use App\Http\Controllers\Api\V1\Admin\AdminOrderController;
 use App\Http\Controllers\Api\V1\Admin\AdminDashboardController;
 use App\Http\Controllers\Api\V1\Admin\AdminUserController;
-use App\Http\Controllers\Api\V1\Admin\AdminSettingController;     // Admin Settings
-use App\Http\Controllers\Api\V1\Admin\AdminBrandController;       // ✅ THÊM
+use App\Http\Controllers\Api\V1\Admin\AdminSettingController;
+use App\Http\Controllers\Api\V1\Admin\AdminBrandController;
+use App\Http\Controllers\Api\V1\Admin\AdminFlashSaleController;
+use App\Http\Controllers\Api\V1\Admin\AdminReviewController;
+use App\Http\Controllers\Api\V1\Admin\AdminCouponController;
+use App\Http\Controllers\Api\V1\Admin\AdminProductImageController;
+use App\Http\Controllers\Api\V1\Admin\AdminProductVariantController;
 
-// ===== Controllers Payment =====
-use App\Http\Controllers\Api\V1\PaymentController;                // VNPay
+// ===== Controllers Admin MỚI =====
+use App\Http\Controllers\Api\V1\Admin\AdminStoreController;
+use App\Http\Controllers\Api\V1\Admin\AdminInventoryController;
+use App\Http\Controllers\Api\V1\Admin\AdminWarrantyController;
+use App\Http\Controllers\Api\V1\Admin\AdminInstallmentController;
+use App\Http\Controllers\Api\V1\Admin\AdminProductBundleController;
+
+// ===== Payment =====
+use App\Http\Controllers\Api\V1\PaymentController;
 
 /**
- * Alias cũ cho FE cũ (tránh 404)
+ * Alias cũ cho FE cũ (tránh 404 khi FE gọi /api/login|register)
  */
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/register', [AuthController::class, 'register']);
 
 Route::prefix('v1')->group(function () {
 
-    // ========================== PUBLIC ==========================
+    // ========== PUBLIC ==========
     Route::get('/ping', fn() => response('pong', 200));
-
     Route::get('/home', [HomeController::class, 'index']);
 
-    // Products
+    // PRODUCTS
     Route::get('/products', [ProductController::class, 'index']);
+    Route::get('/products/recommend', [ProductController::class, 'recommend']);
     Route::get('/products/{id}', [ProductController::class, 'show']);
+    Route::get('/products/{id}/related', [ProductController::class, 'related']);
+    Route::get('/products/{id}/bundles', [ProductBundleController::class, 'index']); // public bundles
 
-    // Categories & Banners
+    // REVIEWS (public GET, auth POST/PUT/DELETE)
+    Route::get('/products/{id}/reviews', [ReviewController::class, 'index']);
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::post('/products/{id}/reviews', [ReviewController::class, 'store']);
+        Route::put('/reviews/{id}', [ReviewController::class, 'update']);
+        Route::delete('/reviews/{id}', [ReviewController::class, 'destroy']);
+    });
+
+    // FLASH SALES
+    Route::get('/flash-sales/active', [FlashSaleController::class, 'active']);
+    Route::get('/flash-sales', [FlashSaleController::class, 'index']);
+
+    // CATEGORIES
     Route::get('/categories', [CategoryController::class, 'index']);
+    Route::get('/categories/{slug}', [CategoryController::class, 'show']);
+
+    // BRANDS
+    Route::get('/brands', [BrandController::class, 'index']);
+    Route::get('/brands/{slug}', [BrandController::class, 'show']);
+
+    // BANNERS
     Route::get('/banners', [BannerController::class, 'index']);
 
-    // FAQs
+    // FAQ & SETTINGS
     Route::get('/faqs', [FaqController::class, 'index']);
-
-    // Public Settings
     Route::get('/settings', [SettingController::class, 'index']);
 
-    // ✅ THÊM: Public Brands
-    Route::get('/brands', [BrandController::class, 'index']);       // ⚡ SỬA: thêm route brands public
-
-    // Auth (user)
+    // AUTH (USER)
     Route::post('/register', [AuthController::class, 'register']);
     Route::post('/login', [AuthController::class, 'login']);
 
-    // ========================== ADMIN AUTH (Public login) ==========================
-    Route::post('/admin/login', [AdminAuthController::class, 'login']);
+    // VNPay callbacks (PUBLIC)
+    Route::match(['get','post'],'/payment/vnpay/return', [PaymentController::class, 'vnpayReturn']);
+    Route::match(['get','post'],'/payment/vnpay/ipn',    [PaymentController::class, 'vnpayIpn']);
 
-    // ========================== VNPay CALLBACKS (PUBLIC) ==========================
-    Route::match(['get', 'post'], '/payment/vnpay/return', [PaymentController::class, 'vnpayReturn']);
-    Route::match(['get', 'post'], '/payment/vnpay/ipn', [PaymentController::class, 'vnpayIpn']);
+    // ========== NEW PUBLIC APIs (cho các box mới trên ProductDetail) ==========
+   // --- Installments (PUBLIC) ---
+// Endpoints CHUẨN cho FE mới:
+// routes/api.php (trong group /v1)
+Route::get('/installments',        [InstallmentController::class, 'index']);
+Route::post('/installments/quote', [InstallmentController::class, 'quote']);
+
+// Alias cũ để FE cũ không 404
+Route::get('/installments/plans',  [InstallmentController::class, 'index']);
+Route::get('/installments/calc',   [InstallmentController::class, 'calcAlias']);   // GET → quote
+Route::post('/installments/apply', [InstallmentController::class, 'applyAlias']);  // stub/mock nếu cần
 
 
-    // ========================== USER PROTECTED ==========================
+
+
+
+
+    // Store availability & reserve
+    Route::get('/stores/availability', [StoreController::class, 'availability']);
+    Route::post('/stores/reserve',     [StoreController::class, 'reserve']);
+
+    // Warranty plans
+    Route::get('/warranty/plans', [WarrantyController::class, 'plans']);
+
+    // ========== USER PROTECTED ==========
     Route::middleware('auth:sanctum')->group(function () {
-
-        // Profile
+        // Account
         Route::get('/user', [AuthController::class, 'user']);
         Route::post('/logout', [AuthController::class, 'logout']);
 
-        // Orders
+        // Orders & Checkout
         Route::post('/checkout/quote', [OrderController::class, 'quote']);
         Route::post('/orders', [OrderController::class, 'store']);
         Route::get('/orders', [OrderController::class, 'index']);
@@ -89,50 +144,68 @@ Route::prefix('v1')->group(function () {
         Route::delete('/wishlist/{productId}', [WishlistController::class, 'destroy']);
 
         // Payments (VNPay)
-        Route::post('/payment/vnpay/create', [PaymentController::class, 'vnpayCreate']); // tạo URL thanh toán
+        Route::post('/payment/vnpay/create', [PaymentController::class, 'vnpayCreate']);
     });
 
+    // ========== ADMIN AUTH (PUBLIC) ==========
+    // FE gọi POST /v1/admin/login
+    Route::post('/admin/login', [AdminAuthController::class, 'login']);
 
-    // ========================== ADMIN PROTECTED ==========================
+    // ========== ADMIN PROTECTED ==========
     Route::prefix('admin')->middleware(['auth:sanctum', 'admin'])->group(function () {
 
-        // Profile
+        // Auth
         Route::get('/me', [AdminAuthController::class, 'me']);
         Route::post('/logout', [AdminAuthController::class, 'logout']);
 
         // Dashboard
         Route::get('/dashboard', [AdminDashboardController::class, 'index']);
 
-        // Products CRUD
+        // Products
         Route::get('/products', [AdminProductController::class, 'index']);
         Route::post('/products', [AdminProductController::class, 'store']);
         Route::get('/products/{id}', [AdminProductController::class, 'show']);
         Route::post('/products/{id}', [AdminProductController::class, 'update']);
         Route::delete('/products/{id}', [AdminProductController::class, 'destroy']);
 
-        // Categories CRUD
+        // Product Images
+        Route::get('/products/{productId}/images', [AdminProductImageController::class, 'index']);
+        Route::post('/products/{productId}/images', [AdminProductImageController::class, 'store']);
+        Route::post('/products/{productId}/images/reorder', [AdminProductImageController::class, 'reorder']);
+        Route::post('/product-images/{imageId}/primary', [AdminProductImageController::class, 'setPrimary']);
+        Route::delete('/product-images/{imageId}', [AdminProductImageController::class, 'destroy']);
+
+        // Product Variants
+        Route::get('/products/{productId}/variants', [AdminProductVariantController::class, 'index']);
+        Route::post('/products/{productId}/variants', [AdminProductVariantController::class, 'store']);
+        Route::post('/products/{productId}/variants/bulk-upsert', [AdminProductVariantController::class, 'bulkUpsert']);
+        Route::get('/product-variants/{variantId}', [AdminProductVariantController::class, 'show']);
+        Route::post('/product-variants/{variantId}', [AdminProductVariantController::class, 'update']);
+        Route::delete('/product-variants/{variantId}', [AdminProductVariantController::class, 'destroy']);
+
+        // Categories
         Route::get('/categories', [AdminCategoryController::class, 'index']);
         Route::post('/categories', [AdminCategoryController::class, 'store']);
         Route::get('/categories/{id}', [AdminCategoryController::class, 'show']);
         Route::post('/categories/{id}', [AdminCategoryController::class, 'update']);
         Route::delete('/categories/{id}', [AdminCategoryController::class, 'destroy']);
 
-        // ✅ THÊM CRUD thương hiệu
+        // Brands
         Route::get('/brands', [AdminBrandController::class, 'index']);
         Route::post('/brands', [AdminBrandController::class, 'store']);
         Route::get('/brands/{id}', [AdminBrandController::class, 'show']);
         Route::post('/brands/{id}', [AdminBrandController::class, 'update']);
         Route::delete('/brands/{id}', [AdminBrandController::class, 'destroy']);
 
-        // Orders CRUD
+        // Orders
         Route::get('/orders', [AdminOrderController::class, 'index']);
         Route::get('/orders/{id}', [AdminOrderController::class, 'show']);
         Route::post('/orders/{id}/status', [AdminOrderController::class, 'updateStatus']);
         Route::get('/orders/{id}/history', [AdminOrderController::class, 'history']);
         Route::delete('/orders/{id}', [AdminOrderController::class, 'destroy']);
-        Route::get('/orders/{id}/invoice', [AdminOrderController::class, 'invoice']); // PDF
+        Route::get('/orders/{id}/invoice', [AdminOrderController::class, 'invoice']);
 
-        // Users CRUD
+        // Users
         Route::get('/users', [AdminUserController::class, 'index']);
         Route::get('/users/{id}', [AdminUserController::class, 'show']);
         Route::post('/users/{id}', [AdminUserController::class, 'update']);
@@ -143,5 +216,57 @@ Route::prefix('v1')->group(function () {
         // Settings
         Route::get('/settings', [AdminSettingController::class, 'index']);
         Route::post('/settings', [AdminSettingController::class, 'save']);
+
+        // Flash Sales
+        Route::get('/flash-sales', [AdminFlashSaleController::class, 'index']);
+        Route::post('/flash-sales', [AdminFlashSaleController::class, 'store']);
+        Route::get('/flash-sales/{id}', [AdminFlashSaleController::class, 'show']);
+        Route::post('/flash-sales/{id}', [AdminFlashSaleController::class, 'update']);
+        Route::delete('/flash-sales/{id}', [AdminFlashSaleController::class, 'destroy']);
+
+        // Reviews
+        Route::get('/reviews', [AdminReviewController::class, 'index']);
+        Route::post('/reviews/{id}/status', [AdminReviewController::class, 'updateStatus']);
+        Route::delete('/reviews/{id}', [AdminReviewController::class, 'destroy']);
+        Route::post('/reviews/bulk/status', [AdminReviewController::class, 'bulkStatus']);
+        Route::post('/reviews/bulk/delete', [AdminReviewController::class, 'bulkDestroy']);
+
+        // Coupons
+        Route::get('/coupons', [AdminCouponController::class, 'index']);
+        Route::post('/coupons', [AdminCouponController::class, 'store']);
+        Route::get('/coupons/{id}', [AdminCouponController::class, 'show']);
+        Route::post('/coupons/{id}', [AdminCouponController::class, 'update']);
+        Route::delete('/coupons/{id}', [AdminCouponController::class, 'destroy']);
+
+        // ===== NEW: Stores (CRUD) =====
+        Route::get('/stores',        [AdminStoreController::class, 'index']);
+        Route::post('/stores',       [AdminStoreController::class, 'store']);
+        Route::get('/stores/{id}',   [AdminStoreController::class, 'show']);
+        Route::post('/stores/{id}',  [AdminStoreController::class, 'update']);
+        Route::delete('/stores/{id}',[AdminStoreController::class, 'destroy']);
+
+        // ===== NEW: Inventories (liệt kê + bulk upsert) =====
+        Route::get('/inventories',                   [AdminInventoryController::class, 'index']);
+        Route::post('/inventories/bulk-upsert',      [AdminInventoryController::class, 'bulkUpsert']);
+        Route::delete('/inventories/{id}',           [AdminInventoryController::class, 'destroy']);
+
+        // ===== NEW: Warranty Plans (CRUD) =====
+        Route::get('/warranties',        [AdminWarrantyController::class, 'index']);
+        Route::post('/warranties',       [AdminWarrantyController::class, 'store']);
+        Route::get('/warranties/{id}',   [AdminWarrantyController::class, 'show']);
+        Route::post('/warranties/{id}',  [AdminWarrantyController::class, 'update']);
+        Route::delete('/warranties/{id}',[AdminWarrantyController::class, 'destroy']);
+
+        // ===== NEW: Installment Plans (CRUD) =====
+        Route::get('/installments',        [AdminInstallmentController::class, 'index']);
+        Route::post('/installments',       [AdminInstallmentController::class, 'store']);
+        Route::get('/installments/{id}',   [AdminInstallmentController::class, 'show']);
+        Route::post('/installments/{id}',  [AdminInstallmentController::class, 'update']);
+        Route::delete('/installments/{id}',[AdminInstallmentController::class, 'destroy']);
+
+        // ===== NEW: Product Bundles (CRUD trên pivot) =====
+        Route::get('/products/{productId}/bundles',                      [AdminProductBundleController::class, 'index']);
+        Route::post('/products/{productId}/bundles/upsert',              [AdminProductBundleController::class, 'upsert']);
+        Route::delete('/products/{productId}/bundles/{bundleProductId}', [AdminProductBundleController::class, 'detach']);
     });
 });

@@ -1,10 +1,3 @@
-<h1 align="center">📱 Cellphone E-Commerce Platform</h1>
-
-<p align="center">
-  <b>Full-stack web application for online electronics retail — built with Laravel (API backend) and React + Vite (frontend).</b>
-</p>
-
----
 
 ## 🚀 Tech Stack
 

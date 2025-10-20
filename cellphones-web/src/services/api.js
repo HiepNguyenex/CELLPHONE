@@ -1,18 +1,27 @@
+// src/services/api.js
 import axios from "axios";
 
-// ===== BASE URL =====
 const BASE_URL = (
   import.meta?.env?.VITE_API_URL || "http://127.0.0.1:8000/api"
 ).replace(/\/+$/, "");
 
-// ===== AXIOS INSTANCE =====
+// Small helper: build FormData from a plain object
+function toFormData(obj = {}) {
+  const fd = new FormData();
+  Object.entries(obj).forEach(([k, v]) => {
+    if (v === undefined || v === null) return;
+    // append File/Blob directly; primitives as-is; objects are expected pre-serialized if needed
+    fd.append(k, v);
+  });
+  return fd;
+}
+
 const api = axios.create({
   baseURL: BASE_URL,
   headers: { Accept: "application/json" },
 });
 
-// ===== TOKEN INTERCEPTOR =====
-// Ưu tiên token admin → fallback user
+// ===== Interceptors
 api.interceptors.request.use((config) => {
   const adminToken = localStorage.getItem("admin_token");
   const userToken = localStorage.getItem("token");
@@ -21,7 +30,6 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// ===== RESPONSE INTERCEPTOR =====
 api.interceptors.response.use(
   (res) => res,
   (err) => {
@@ -33,159 +41,229 @@ api.interceptors.response.use(
   }
 );
 
-// ====================================================================
 // ============================ USER API ==============================
-// ====================================================================
-
-// ===== AUTH (USER) =====
 export const login = (data) => api.post("/login", data);
 export const register = (data) => api.post("/register", data);
-export const getUser = () => api.get("/v1/user");
+export const getUser = (signal) => api.get("/v1/user", { signal });
 export const logout = () => api.post("/v1/logout");
 
-// ===== CATALOG (PUBLIC) =====
-export const getProducts = (params = {}) => api.get("/v1/products", { params });
-export const getProductDetail = (idOrSlug) => api.get(`/v1/products/${idOrSlug}`);
-export const getCategories = () => api.get("/v1/categories");
-export const getBanners = () => api.get("/v1/banners");
-export const getFaqs = () => api.get("/v1/faqs");
-// ✅ THÊM: Public Brands
-export const getBrands = (params = {}) => api.get("/v1/brands", { params });
+// ============================ CATALOG (PUBLIC) ======================
+export const getProducts = (params = {}, signal) =>
+  api.get("/v1/products", { params, signal });
 
-// ===== SETTINGS (PUBLIC) =====
-export const getSettings = () => api.get("/v1/settings");
+export const getProductDetail = (idOrSlug, signal) =>
+  api.get(`/v1/products/${idOrSlug}`, { signal });
 
-// ===== CHECKOUT / ORDERS (USER) =====
+// alias để dùng thống nhất ở FE
+export const getProduct = getProductDetail;
+
+export const getRelatedProducts = (id, signal) =>
+  api.get(`/v1/products/${id}/related`, { signal });
+
+export const getRecommendations = (params = {}, signal) =>
+  api.get("/v1/products/recommend", { params, signal });
+
+// Gợi ý mua kèm (Combo / Phụ kiện)
+export const getProductBundles = (productId, signal) =>
+  api
+    .get(`/v1/products/${productId}/bundles`, { signal })
+    .catch(() =>
+      api.get(`/v1/products/${productId}/related`, { signal })
+    );
+
+// ============================ Reviews ===============================
+export const getReviews = (productId, params = {}, signal) =>
+  api.get(`/v1/products/${productId}/reviews`, { params, signal });
+
+export const addReview = (productId, payload, signal) =>
+  api.post(`/v1/products/${productId}/reviews`, payload, { signal });
+
+export const updateReview = (reviewId, payload) =>
+  api.put(`/v1/reviews/${reviewId}`, payload);
+
+export const deleteReview = (reviewId) =>
+  api.delete(`/v1/reviews/${reviewId}`);
+
+// =================== Categories, Banners, FAQs, Brands ==============
+export const getCategories = (signal) => api.get("/v1/categories", { signal });
+export const getBanners = (signal) => api.get("/v1/banners", { signal });
+export const getFaqs = (signal) => api.get("/v1/faqs", { signal });
+
+// BRANDS (PUBLIC)
+export const getBrands = (params = {}, signal) =>
+  api.get("/v1/brands", { params, signal });
+export const getBrandDetail = (slug, params = {}, signal) =>
+  api.get(`/v1/brands/${slug}`, { params, signal });
+
+// ============================ SETTINGS (PUBLIC) =====================
+export const getSettings = (signal) => api.get("/v1/settings", { signal });
+
+// ===================== CHECKOUT / ORDERS (USER) =====================
 export const quoteCheckout = (payload) => api.post("/v1/checkout/quote", payload);
 export const createOrder = (payload) => api.post("/v1/orders", payload);
-export const getOrders = (params = {}) => api.get("/v1/orders", { params });
-export const getOrderDetail = (id) => api.get(`/v1/orders/${id}`);
+export const getOrders = (params = {}, signal) =>
+  api.get("/v1/orders", { params, signal });
+export const getOrderDetail = (id, signal) =>
+  api.get(`/v1/orders/${id}`, { signal });
 export const cancelOrder = (id) => api.post(`/v1/orders/${id}/cancel`);
-
-// ✅ THÊM: VNPay – tạo URL thanh toán
 export const vnpayCreate = (orderId) =>
   api.post("/v1/payment/vnpay/create", { order_id: orderId });
 
-// ===== WISHLIST (USER) =====
-export const fetchWishlist = () => api.get("/v1/wishlist");
+// ============================ WISHLIST (USER) =======================
+export const fetchWishlist = (signal) => api.get("/v1/wishlist", { signal });
 export const addWishlist = (productId) =>
   api.post("/v1/wishlist", { product_id: Number(productId) });
 export const removeWishlist = (productId) =>
   api.delete(`/v1/wishlist/${Number(productId)}`);
 
-// ===== UTIL (Checkout.jsx) =====
+// =============================== UTIL ===============================
 export const mapCartToItems = (cart = []) =>
   cart.map((p) => ({ id: Number(p.id), qty: Number(p.qty ?? 1) }));
 
-// ====================================================================
-// ============================ ADMIN API =============================
-// ====================================================================
+// ============================ FLASH SALES ===========================
+export const getActiveFlashSales = (signal) =>
+  api.get("/v1/flash-sales/active", { signal });
+export const getFlashSales = getActiveFlashSales;
 
-// ===== AUTH (ADMIN) =====
+// ============================ PUBLIC: NEW BOXES =====================
+// Warranty plans (public)
+export const getWarrantyPlans = (params = {}, signal) =>
+  api.get(`/v1/warranty/plans`, { params, signal });
+
+// Installments (public)
+export const getInstallments = (params = {}, signal) =>
+  api.get(`/v1/installments`, { params, signal });
+
+export const quoteInstallment = (payload = {}, signal) =>
+  api.post(`/v1/installments/quote`, payload, { signal });
+
+// Aliases để tương thích code cũ (nếu còn import)
+export const getInstallmentPlans = getInstallments;
+export const calcInstallment = (payload = {}, signal) =>
+  quoteInstallment(payload, signal);
+
+// Store availability & reserve (public)
+export const storeAvailability = (params = {}, signal) =>
+  api.get(`/v1/stores/availability`, { params, signal });
+export const storeReserve = (payload = {}) =>
+  api.post(`/v1/stores/reserve`, payload);
+
+// ============================ ADMIN API ============================
+// AUTH (ADMIN)
 export const adminLogin = (data) => api.post("/v1/admin/login", data);
 export const adminMe = () => api.get("/v1/admin/me");
 export const adminLogout = () => api.post("/v1/admin/logout");
 
-// ===== DASHBOARD =====
+// DASHBOARD
 export const adminGetDashboard = (params = {}) =>
   api.get("/v1/admin/dashboard", { params });
 
-// ===== ADMIN PRODUCTS =====
+// PRODUCTS
 export const adminGetProducts = (params = {}) =>
   api.get("/v1/admin/products", { params });
 
-export const adminCreateProduct = (payload = {}) => {
-  const fd = new FormData();
-  Object.entries(payload).forEach(([k, v]) => {
-    if (v !== undefined && v !== null) fd.append(k, v);
-  });
-  return api.post("/v1/admin/products", fd);
-};
+export const adminCreateProduct = (payload = {}) =>
+  api.post("/v1/admin/products", toFormData(payload));
 
-export const adminUpdateProduct = (id, payload = {}) => {
-  const fd = new FormData();
-  Object.entries(payload).forEach(([k, v]) => {
-    if (v !== undefined && v !== null) fd.append(k, v);
-  });
-  return api.post(`/v1/admin/products/${id}`, fd);
-};
+export const adminUpdateProduct = (id, payload = {}) =>
+  api.post(`/v1/admin/products/${id}`, toFormData(payload));
 
 export const adminDeleteProduct = (id) =>
   api.delete(`/v1/admin/products/${id}`);
 
-// ===== ADMIN CATEGORIES =====
+// 🔎 single product (dùng cho BundlesAdmin)
+export const adminGetProduct = (id) =>
+  api.get(`/v1/admin/products/${id}`);
+
+// Product Images
+export const adminGetProductImages = (productId) =>
+  api.get(`/v1/admin/products/${productId}/images`);
+
+export const adminUploadProductImage = (productId, fileOrUrl, isPrimary = false) => {
+  const fd = new FormData();
+  if (fileOrUrl instanceof File) fd.append("image", fileOrUrl);
+  else fd.append("url", String(fileOrUrl));
+  if (isPrimary) fd.append("is_primary", "1");
+  return api.post(`/v1/admin/products/${productId}/images`, fd);
+};
+
+export const adminDeleteProductImage = (imageId) =>
+  api.delete(`/v1/admin/product-images/${imageId}`);
+
+export const adminReorderProductImages = (productId, ids = []) =>
+  api.post(`/v1/admin/products/${productId}/images/reorder`, { ids });
+
+export const adminSetPrimaryImage = (imageId) =>
+  api.post(`/v1/admin/product-images/${imageId}/primary`, {});
+
+// Product Variants
+export const adminGetProductVariants = (productId, params = {}) =>
+  api.get(`/v1/admin/products/${productId}/variants`, { params });
+
+export const adminCreateProductVariant = (productId, payload = {}) =>
+  api.post(`/v1/admin/products/${productId}/variants`, payload);
+
+export const adminBulkUpsertProductVariants = (productId, variants = []) =>
+  api.post(`/v1/admin/products/${productId}/variants/bulk-upsert`, { variants });
+
+export const adminGetProductVariant = (variantId) =>
+  api.get(`/v1/admin/product-variants/${variantId}`);
+
+export const adminUpdateProductVariant = (variantId, payload = {}) =>
+  api.post(`/v1/admin/product-variants/${variantId}`, payload);
+
+export const adminDeleteProductVariant = (variantId) =>
+  api.delete(`/v1/admin/product-variants/${variantId}`);
+
+// CATEGORIES (ADMIN – hỗ trợ icon file hoặc icon_url)
 export const adminGetCategories = (params = {}) =>
   api.get("/v1/admin/categories", { params });
 
 export const adminCreateCategory = (payload = {}) =>
-  api.post("/v1/admin/categories", payload);
+  api.post("/v1/admin/categories", toFormData(payload)); // accepts: name, is_visible/is_active, icon (File), icon_url
 
 export const adminUpdateCategory = (id, payload = {}) =>
-  api.post(`/v1/admin/categories/${id}`, payload);
+  api.post(`/v1/admin/categories/${id}`, toFormData(payload));
 
 export const adminDeleteCategory = (id) =>
   api.delete(`/v1/admin/categories/${id}`);
 
-// ===== ADMIN BRANDS =====  // ✅ THÊM
+// BRANDS (ADMIN – hỗ trợ logo file hoặc logo_url)
 export const adminGetBrands = (params = {}) =>
   api.get("/v1/admin/brands", { params });
 
-export const adminCreateBrand = (payload = {}) => {
-  const fd = new FormData();
-  Object.entries(payload).forEach(([k, v]) => {
-    if (v !== undefined && v !== null) fd.append(k, v);
-  });
-  return api.post("/v1/admin/brands", fd);
-};
+export const adminCreateBrand = (payload = {}) =>
+  api.post("/v1/admin/brands", toFormData(payload)); // accepts: name, slug?, description?, is_active, sort_order, logo(File) or logo_url
 
-export const adminUpdateBrand = (id, payload = {}) => {
-  const fd = new FormData();
-  Object.entries(payload).forEach(([k, v]) => {
-    if (v !== undefined && v !== null) fd.append(k, v);
-  });
-  return api.post(`/v1/admin/brands/${id}`, fd);
-};
+export const adminUpdateBrand = (id, payload = {}) =>
+  api.post(`/v1/admin/brands/${id}`, toFormData(payload));
 
 export const adminDeleteBrand = (id) =>
   api.delete(`/v1/admin/brands/${id}`);
 
-// ===== ADMIN ORDERS =====
+// ORDERS
 export const adminGetOrders = (params = {}) =>
   api.get("/v1/admin/orders", { params });
-
 export const adminGetOrder = (id) => api.get(`/v1/admin/orders/${id}`);
-
 export const adminDeleteOrder = (id) => api.delete(`/v1/admin/orders/${id}`);
-
-/** ✅ Cập nhật trạng thái đơn hàng (kèm ghi chú) */
 export const adminUpdateOrderStatus = (id, status, note) =>
   api.post(`/v1/admin/orders/${id}/status`, { status, note });
-
-/** ✅ Tải file hóa đơn PDF */
 export const adminDownloadInvoice = (id) =>
   api.get(`/v1/admin/orders/${id}/invoice`, { responseType: "blob" });
 
-// ===== ADMIN USERS =====
+// USERS
 export const adminGetUsers = (params = {}) =>
   api.get("/v1/admin/users", { params });
-
 export const adminGetUser = (id) => api.get(`/v1/admin/users/${id}`);
-
 export const adminUpdateUser = (id, payload) =>
   api.post(`/v1/admin/users/${id}`, payload);
-
 export const adminBanUser = (id) => api.post(`/v1/admin/users/${id}/ban`);
 export const adminUnbanUser = (id) => api.post(`/v1/admin/users/${id}/unban`);
 export const adminLogoutAllUser = (id) =>
   api.post(`/v1/admin/users/${id}/logout-all`);
 
-// ====================================================================
-// ========================= ADMIN SETTINGS ===========================
-// ====================================================================
-
-// ===== SETTINGS =====
+// SETTINGS
 export const adminGetSettings = () => api.get("/v1/admin/settings");
-
 export const adminSaveSettings = (settings = {}) => {
   const fd = new FormData();
   const { logo, ...rest } = settings || {};
@@ -194,7 +272,88 @@ export const adminSaveSettings = (settings = {}) => {
   return api.post("/v1/admin/settings", fd);
 };
 
-// ===== EXPORT DEFAULT =====
-export default api;
+// FLASH SALES
+export const adminGetFlashSales = (params = {}) =>
+  api.get("/v1/admin/flash-sales", { params });
+export const adminCreateFlashSale = (payload = {}) =>
+  api.post(`/v1/admin/flash-sales`, payload);
+export const adminUpdateFlashSale = (id, payload = {}) =>
+  api.post(`/v1/admin/flash-sales/${id}`, payload);
+export const adminDeleteFlashSale = (id) =>
+  api.delete(`/v1/admin/flash-sales/${id}`);
 
-// === KẾT FILE: src/services/api.js ===
+// REVIEWS
+export const adminGetReviews = (params = {}) =>
+  api.get("/v1/admin/reviews", { params });
+export const adminUpdateReviewStatus = (id, status) =>
+  api.post(`/v1/admin/reviews/${id}/status`, { status });
+export const adminDeleteReview = (id) =>
+  api.delete(`/v1/admin/reviews/${id}`);
+export const adminBulkReviewStatus = (ids = [], status) =>
+  api.post("/v1/admin/reviews/bulk/status", { ids, status });
+export const adminBulkReviewDelete = (ids = []) =>
+  api.post("/v1/admin/reviews/bulk/delete", { ids });
+
+// COUPONS
+export const adminGetCoupons = (params = {}) =>
+  api.get("/v1/admin/coupons", { params });
+
+export const adminCreateCoupon = (payload = {}) =>
+  api.post("/v1/admin/coupons", payload);
+
+export const adminGetCoupon = (id) =>
+  api.get(`/v1/admin/coupons/${id}`);
+
+export const adminUpdateCoupon = (id, payload = {}) =>
+  api.post(`/v1/admin/coupons/${id}`, payload);
+
+export const adminDeleteCoupon = (id) =>
+  api.delete(`/v1/admin/coupons/${id}`);
+
+// Bundles
+export const adminGetBundles = (productId) =>
+  api.get(`/v1/admin/products/${productId}/bundles`);
+export const adminUpsertBundles = (productId, items = []) =>
+  api.post(`/v1/admin/products/${productId}/bundles/upsert`, { items });
+export const adminDetachBundle = (productId, bundleProductId) =>
+  api.delete(`/v1/admin/products/${productId}/bundles/${bundleProductId}`);
+
+// Stores
+export const adminGetStores = (params = {}) =>
+  api.get(`/v1/admin/stores`, { params });
+export const adminCreateStore = (payload = {}) =>
+  api.post(`/v1/admin/stores`, payload);
+export const adminUpdateStore = (id, payload = {}) =>
+  api.post(`/v1/admin/stores/${id}`, payload);
+export const adminDeleteStore = (id) =>
+  api.delete(`/v1/admin/stores/${id}`);
+
+// Inventories
+export const adminGetInventories = (params = {}) =>
+  api.get(`/v1/admin/inventories`, { params });
+export const adminUpsertInventories = (items = []) =>
+  api.post(`/v1/admin/inventories/bulk-upsert`, { items });
+export const adminDeleteInventory = (id) =>
+  api.delete(`/v1/admin/inventories/${id}`);
+
+// Warranty Plans (Admin)
+export const adminGetWarrantyPlans = (params = {}) =>
+  api.get(`/v1/admin/warranties`, { params });
+export const adminCreateWarrantyPlan = (payload = {}) =>
+  api.post(`/v1/admin/warranties`, payload);
+export const adminUpdateWarrantyPlan = (id, payload = {}) =>
+  api.post(`/v1/admin/warranties/${id}`, payload);
+export const adminDeleteWarrantyPlan = (id) =>
+  api.delete(`/v1/admin/warranties/${id}`);
+
+// Installment Plans (Admin)
+export const adminGetInstallments = (params = {}) =>
+  api.get(`/v1/admin/installments`, { params });
+export const adminCreateInstallment = (payload = {}) =>
+  api.post(`/v1/admin/installments`, payload);
+export const adminUpdateInstallment = (id, payload = {}) =>
+  api.post(`/v1/admin/installments/${id}`, payload);
+export const adminDeleteInstallment = (id) =>
+  api.delete(`/v1/admin/installments/${id}`);
+
+export default api;

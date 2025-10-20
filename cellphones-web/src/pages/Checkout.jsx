@@ -11,7 +11,7 @@ export default function Checkout() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { cart, clearCart } = useCart();
-  const toast = useToast(); // ⬅️ hook
+  const toast = useToast();
 
   const [form, setForm] = useState({
     name: "",
@@ -24,9 +24,17 @@ export default function Checkout() {
     coupon: "",
   });
 
-  const [quote, setQuote] = useState({ subtotal: 0, shipping: 0, discount: 0, total: 0 });
+  const [quote, setQuote] = useState({
+    subtotal: 0,
+    shipping: 0,
+    discount: 0,
+    total: 0,
+    coupon_code: null,
+  });
+
   const [quoting, setQuoting] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [applyingCoupon, setApplyingCoupon] = useState(false);
 
   // ép đăng nhập
   useEffect(() => {
@@ -42,38 +50,86 @@ export default function Checkout() {
     () => ({
       items: mapCartToItems(cart),
       shipping_method: form.shipping_method,
-      coupon: form.coupon || null,
+      coupon: form.coupon ? String(form.coupon).trim().toUpperCase() : null,
     }),
     [cart, form.shipping_method, form.coupon]
   );
 
-  // Gọi quote + thông báo lỗi bằng toast
+  // Quote mỗi khi giỏ / ship / coupon đổi
   useEffect(() => {
     if (!cart?.length) return;
+    let cancelled = false;
     (async () => {
       try {
         setQuoting(true);
         const { data } = await quoteCheckout(basePayload);
+        if (cancelled) return;
         setQuote({
           subtotal: data?.subtotal || 0,
           shipping: data?.shipping || 0,
           discount: data?.discount || 0,
           total: data?.total || 0,
+          coupon_code: data?.coupon_code || null,
         });
       } catch (e) {
+        if (cancelled) return;
         console.error(e);
-        toast.error("Không tính được tạm tính. Hãy thử lại hoặc đăng nhập lại.", {
-          title: "Lỗi báo giá",
-        });
+        const msg = e?.response?.data?.message || "Không tính được tạm tính. Hãy thử lại.";
+        toast.error(msg, { title: "Lỗi báo giá" });
+        // reset discount nếu lỗi coupon
+        setQuote((q) => ({ ...q, discount: 0, coupon_code: null, total: (q.subtotal || 0) + (q.shipping || 0) }));
       } finally {
-        setQuoting(false);
+        if (!cancelled) setQuoting(false);
       }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [basePayload, cart?.length, toast]);
 
   const onChange = (e) => {
-    const { name, value } = e.target;
-    setForm((s) => ({ ...s, [name]: value }));
+    const { name, value, type } = e.target;
+    setForm((s) => ({ ...s, [name]: type === "radio" ? value : value }));
+  };
+
+  const applyCoupon = async () => {
+    if (!cart?.length) return;
+    if (!form.coupon?.trim()) {
+      toast.info("Bạn chưa nhập mã giảm giá.", { title: "Mã giảm giá" });
+      return;
+    }
+    try {
+      setApplyingCoupon(true);
+      const payload = {
+        items: mapCartToItems(cart),
+        shipping_method: form.shipping_method,
+        coupon: form.coupon.trim().toUpperCase(),
+      };
+      const { data } = await quoteCheckout(payload);
+      setQuote({
+        subtotal: data?.subtotal || 0,
+        shipping: data?.shipping || 0,
+        discount: data?.discount || 0,
+        total: data?.total || 0,
+        coupon_code: data?.coupon_code || form.coupon.trim().toUpperCase(),
+      });
+      toast.success(`Đã áp dụng mã ${data?.coupon_code || form.coupon.trim().toUpperCase()}.`, {
+        title: "Áp dụng thành công",
+      });
+    } catch (e) {
+      console.error(e);
+      const msg = e?.response?.data?.message || "Mã giảm giá không hợp lệ hoặc đã hết hạn.";
+      toast.warning(msg, { title: "Không áp dụng được mã" });
+      // Không xoá input để người dùng tự sửa; reset discount hiển thị
+      setQuote((q) => ({
+        ...q,
+        discount: 0,
+        coupon_code: null,
+        total: (q.subtotal || 0) + (q.shipping || 0),
+      }));
+    } finally {
+      setApplyingCoupon(false);
+    }
   };
 
   const submitOrder = async (e) => {
@@ -93,13 +149,24 @@ export default function Checkout() {
     let tId;
     try {
       setLoading(true);
-      // loading toast
       tId = toast.loading("Đang tạo đơn hàng…", { title: "Vui lòng chờ" });
 
       const { data } = await createOrder(payload);
       clearCart();
 
-      // success
+      // Nếu BE trả về pay_url (VNPay) -> chuyển ngay
+      if (data?.pay_url) {
+        toast.update(tId, {
+          type: "success",
+          title: "Đang chuyển đến VNPay",
+          description: "Vui lòng hoàn tất thanh toán trên cổng VNPay.",
+          duration: 2000,
+        });
+        window.location.href = data.pay_url;
+        return;
+      }
+
+      // Nếu không phải VNPay, điều hướng như cũ
       toast.update(tId, {
         type: "success",
         title: "Đặt hàng thành công",
@@ -107,7 +174,6 @@ export default function Checkout() {
         duration: 4000,
       });
 
-      // Điều hướng
       const id = data?.order?.id ?? data?.id;
       navigate(id ? `/order/${id}` : "/thank-you");
     } catch (e) {
@@ -115,7 +181,6 @@ export default function Checkout() {
       const message = e?.response?.data?.message || "";
       const errs = e?.response?.data?.errors;
 
-      // Case: hết hàng / không đủ tồn kho
       if (/tồn kho|hết hàng|không đủ/i.test(message)) {
         if (tId) {
           toast.update(tId, {
@@ -135,7 +200,6 @@ export default function Checkout() {
         return;
       }
 
-      // Case: 422 validation
       if (errs) {
         const msg = Object.values(errs).flat().join(", ");
         if (tId) {
@@ -151,7 +215,6 @@ export default function Checkout() {
         return;
       }
 
-      // Fallback
       const fallback = message || "Đặt hàng thất bại.";
       if (tId) {
         toast.update(tId, {
@@ -235,6 +298,16 @@ export default function Checkout() {
               />
               <span>Thanh toán khi nhận hàng (COD)</span>
             </label>
+            <label className="flex items-center gap-2 mt-2">
+              <input
+                type="radio"
+                name="payment_method"
+                value="vnpay"
+                checked={form.payment_method === "vnpay"}
+                onChange={onChange}
+              />
+              <span>VNPay (chuyển sang cổng thanh toán)</span>
+            </label>
           </div>
         </div>
 
@@ -245,22 +318,19 @@ export default function Checkout() {
               name="coupon"
               value={form.coupon}
               onChange={onChange}
-              placeholder="SALE10"
+              placeholder="VD: WELCOME10"
               className="w-full border rounded p-2"
+              autoComplete="off"
             />
           </div>
           <button
             type="button"
             className="px-4 py-2 border rounded"
-            onClick={() => {
-              // đổi coupon → useEffect tự quote lại; chỉ hiển thị feedback
-              toast.info(form.coupon ? `Đã áp dụng mã ${form.coupon}` : "Chưa nhập mã giảm giá", {
-                title: "Mã giảm giá",
-              });
-              setForm((s) => ({ ...s })); // trigger re-render nếu cần
-            }}
+            onClick={applyCoupon}
+            disabled={applyingCoupon || quoting || !cart?.length}
+            title={quoting ? "Đang tính lại tạm tính…" : undefined}
           >
-            Áp dụng
+            {applyingCoupon ? "Đang áp dụng…" : "Áp dụng"}
           </button>
         </div>
 
@@ -280,16 +350,29 @@ export default function Checkout() {
         <div className="space-y-1 text-sm">
           {cart.map((it) => (
             <div key={`${it.id}-${it.qty}`} className="flex justify-between">
-              <span>{it.name || `Sản phẩm #${it.id}`} × {it.qty}</span>
+              <span>
+                {it.name || `Sản phẩm #${it.id}`} × {it.qty}
+              </span>
             </div>
           ))}
         </div>
 
         <hr className="my-3" />
         <div className="space-y-1 text-sm">
-          <div className="flex justify-between"><span>Tạm tính</span><span>{fVND(quote.subtotal)}</span></div>
-          <div className="flex justify-between"><span>Phí vận chuyển</span><span>{fVND(quote.shipping)}</span></div>
-          <div className="flex justify-between"><span>Giảm giá</span><span>-{fVND(quote.discount)}</span></div>
+          <div className="flex justify-between">
+            <span>Tạm tính</span>
+            <span>{fVND(quote.subtotal)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Phí vận chuyển</span>
+            <span>{fVND(quote.shipping)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>
+              Giảm giá{quote.coupon_code ? ` (${quote.coupon_code})` : ""}
+            </span>
+            <span>-{fVND(quote.discount)}</span>
+          </div>
         </div>
         <hr className="my-3" />
         <div className="flex justify-between font-semibold text-lg">
