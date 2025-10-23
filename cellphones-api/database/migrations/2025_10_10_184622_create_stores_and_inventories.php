@@ -6,11 +6,12 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration {
     public function up(): void {
+        // ===== Bảng stores =====
         if (!Schema::hasTable('stores')) {
             Schema::create('stores', function (Blueprint $table) {
                 $table->id();
-                $table->string('name');
-                $table->string('city')->index();    // HCM, HN, DN...
+                $table->string('name')->unique(); // ✅ thêm unique để SQLite hỗ trợ upsert()
+                $table->string('city')->index();  // HCM, HN, DN...
                 $table->string('address')->nullable();
                 $table->decimal('lat', 10, 6)->nullable();
                 $table->decimal('lng', 10, 6)->nullable();
@@ -18,6 +19,7 @@ return new class extends Migration {
             });
         }
 
+        // ===== Bảng store_inventories =====
         if (!Schema::hasTable('store_inventories')) {
             Schema::create('store_inventories', function (Blueprint $table) {
                 $table->id();
