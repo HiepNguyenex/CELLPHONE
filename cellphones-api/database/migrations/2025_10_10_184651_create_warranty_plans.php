@@ -21,8 +21,8 @@ return new class extends Migration {
                 $table->string('type')->default('extended'); // extended | accident | combo
                 $table->unsignedSmallInteger('months')->default(12);
 
-                // Dùng unsignedDecimal để tránh lỗi khi chain ->unsigned() với decimal
-                $table->unsignedDecimal('price', 12, 2);
+                // ✅ Sửa lại cú pháp decimal() ->unsigned()
+                $table->decimal('price', 12, 2)->unsigned();
 
                 $table->boolean('active')->default(true);
                 $table->timestamps();
