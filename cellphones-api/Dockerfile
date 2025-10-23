@@ -41,7 +41,13 @@ RUN composer clear-cache \
 RUN mkdir -p database && touch database/database.sqlite
 
 # ===============================
-# 7️⃣ Generate key & cache Laravel config/routes/views
+# 7️⃣ Copy .env.example → .env (fix: missing .env on Render)
+# ===============================
+RUN if [ ! -f ".env" ]; then cp .env.example .env; fi \
+ && echo "✅ Copied .env.example → .env"
+
+# ===============================
+# 8️⃣ Generate key & cache Laravel config/routes/views
 # ===============================
 RUN php artisan key:generate \
  && php artisan config:clear \
@@ -51,11 +57,11 @@ RUN php artisan key:generate \
  && php artisan optimize:clear
 
 # ===============================
-# 8️⃣ Expose port for Render
+# 9️⃣ Expose port for Render
 # ===============================
 EXPOSE 10000
 
 # ===============================
-# 9️⃣ Start Laravel server
+# 🔟 Start Laravel server
 # ===============================
 CMD php artisan serve --host=0.0.0.0 --port=10000
