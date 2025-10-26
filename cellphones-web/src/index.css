@@ -1,0 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Import thư viện ngoài sau Tailwind */
+@import "swiper/css";
+@import "swiper/css/navigation";
+@import "swiper/css/pagination";
+
+/* Nếu muốn custom CSS thì thêm ở đây */
+body {
+  @apply bg-gray-50 font-sans;
+}

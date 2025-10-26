@@ -1,0 +1,15 @@
+# Ignore backend (Laravel)
+cellphones-api/
+vendor/
+storage/
+bootstrap/
+database/
+artisan
+composer.json
+composer.lock
+
+# Ignore unnecessary folders
+node_modules/
+.env
+.env.local
+.env.production
