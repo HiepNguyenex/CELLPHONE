@@ -11,7 +11,7 @@ class StripeService
     {
         Stripe::setApiKey(config('services.stripe.secret'));
 
-        // ✅ Tự động lấy URL frontend đúng môi trường
+        // ✅ Tự động chọn đúng URL frontend theo môi trường
         $frontend = rtrim(config('app.frontend_url'), '/');
 
         $session = Session::create([

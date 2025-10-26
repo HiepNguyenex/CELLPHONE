@@ -7,8 +7,7 @@ return [
     'debug' => (bool) env('APP_DEBUG', false),
     'url' => env('APP_URL', 'http://localhost'),
 
-    // ✅ Frontend URL (Stripe redirect + VNPAY)
-    // Nếu APP_FRONTEND_URL không có => fallback về FRONTEND_URL hoặc localhost
+    // ✅ Frontend URL (Stripe redirect + VNPay)
     'frontend_url' => env('APP_FRONTEND_URL',
         env('FRONTEND_URL',
             env('APP_ENV') === 'production'
