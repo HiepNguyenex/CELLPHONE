@@ -15,7 +15,6 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\Api\V1\BrandController;
 use App\Http\Controllers\Api\V1\ReviewController;
 use App\Http\Controllers\Api\V1\FlashSaleController;
-
 use App\Http\Controllers\Api\V1\StripeWebhookController;
 
 // ===== Controllers PUBLIC mở rộng =====
@@ -23,7 +22,6 @@ use App\Http\Controllers\Api\V1\InstallmentController;
 use App\Http\Controllers\Api\V1\StoreController;
 use App\Http\Controllers\Api\V1\WarrantyController;
 use App\Http\Controllers\Api\V1\ProductBundleController;
-
 
 // ===== Controllers ADMIN =====
 use App\Http\Controllers\Api\V1\Admin\AdminAuthController;
@@ -110,8 +108,7 @@ Route::prefix('v1')->group(function () {
     Route::get('/payment/result/{id}', [PaymentController::class, 'result']);
     Route::post('/payment/stripe/webhook', [StripeWebhookController::class, 'handle']);
 
-
-// ========== PUBLIC APIs (Installments / Store / Warranty) ==========
+    // ========== PUBLIC APIs (Installments / Store / Warranty) ==========
     Route::get('/installments', [InstallmentController::class, 'index']);
     Route::post('/installments/quote', [InstallmentController::class, 'quote']);
     Route::get('/installments/plans', [InstallmentController::class, 'index']);
@@ -264,4 +261,19 @@ Route::prefix('v1')->group(function () {
         Route::post('/products/{productId}/bundles/upsert', [AdminProductBundleController::class, 'upsert']);
         Route::delete('/products/{productId}/bundles/{bundleProductId}', [AdminProductBundleController::class, 'detach']);
     });
+});
+
+// ============================================
+// 🔧 TEMP: Clear cache for Render Free tier
+// ============================================
+use Illuminate\Support\Facades\Artisan;
+
+Route::get('/__clear-cache', function () {
+    Artisan::call('config:clear');
+    Artisan::call('cache:clear');
+    Artisan::call('route:clear');
+    Artisan::call('view:clear');
+    Artisan::call('optimize:clear');
+    Artisan::call('config:cache');
+    return response()->json(['ok' => true, 'message' => '✅ All cache cleared successfully']);
 });
