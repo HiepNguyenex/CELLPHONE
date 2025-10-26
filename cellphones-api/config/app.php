@@ -3,15 +3,19 @@
 return [
 
     'name' => env('APP_NAME', 'Laravel'),
-
     'env' => env('APP_ENV', 'production'),
-
     'debug' => (bool) env('APP_DEBUG', false),
-
     'url' => env('APP_URL', 'http://localhost'),
 
-    // ✅ Quan trọng: đọc đúng URL frontend từ env
-    'frontend_url' => env('APP_FRONTEND_URL', env('FRONTEND_URL', 'http://127.0.0.1:5173')),
+    // ✅ Frontend URL (Stripe redirect + VNPAY)
+    // Nếu APP_FRONTEND_URL không có => fallback về FRONTEND_URL hoặc localhost
+    'frontend_url' => env('APP_FRONTEND_URL',
+        env('FRONTEND_URL',
+            env('APP_ENV') === 'production'
+                ? 'https://cellphone-two.vercel.app'
+                : 'http://127.0.0.1:5173'
+        )
+    ),
 
     'timezone' => 'Asia/Ho_Chi_Minh',
 
@@ -20,7 +24,6 @@ return [
     'faker_locale' => env('APP_FAKER_LOCALE', 'en_US'),
 
     'cipher' => 'AES-256-CBC',
-
     'key' => env('APP_KEY'),
 
     'previous_keys' => [

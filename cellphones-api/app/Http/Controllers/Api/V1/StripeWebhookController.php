@@ -18,14 +18,9 @@ class StripeWebhookController extends Controller
 
         $payload = $request->getContent();
         $sigHeader = $request->header('Stripe-Signature');
-        $event = null;
 
         try {
-            $event = Webhook::constructEvent(
-                $payload,
-                $sigHeader,
-                $endpointSecret
-            );
+            $event = Webhook::constructEvent($payload, $sigHeader, $endpointSecret);
         } catch (\UnexpectedValueException $e) {
             Log::error('⚠️ Stripe: Invalid payload');
             return response('Invalid payload', 400);
@@ -34,7 +29,6 @@ class StripeWebhookController extends Controller
             return response('Invalid signature', 400);
         }
 
-        // ✅ Xử lý event Stripe
         switch ($event->type) {
             case 'checkout.session.completed':
                 $session = $event->data->object;

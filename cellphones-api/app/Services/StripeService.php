@@ -11,8 +11,8 @@ class StripeService
     {
         Stripe::setApiKey(config('services.stripe.secret'));
 
-        // ✅ Lấy URL FE động từ .env
-        $frontend = rtrim(config('app.frontend_url', 'http://127.0.0.1:5173'), '/');
+        // ✅ Tự động lấy URL frontend đúng môi trường
+        $frontend = rtrim(config('app.frontend_url'), '/');
 
         $session = Session::create([
             'payment_method_types' => ['card'],
@@ -30,7 +30,7 @@ class StripeService
             'success_url' => "{$frontend}/payment/result?order_id={$order->id}&ok=1",
             'cancel_url'  => "{$frontend}/payment/result?order_id={$order->id}&ok=0",
             'metadata' => [
-                'order_id' => $order->id, // ✅ Để webhook nhận diện đúng
+                'order_id' => $order->id,
             ],
         ]);
 
