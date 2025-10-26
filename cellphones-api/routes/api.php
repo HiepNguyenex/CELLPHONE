@@ -269,11 +269,20 @@ Route::prefix('v1')->group(function () {
 use Illuminate\Support\Facades\Artisan;
 
 Route::get('/__clear-cache', function () {
-    Artisan::call('config:clear');
-    Artisan::call('cache:clear');
-    Artisan::call('route:clear');
-    Artisan::call('view:clear');
-    Artisan::call('optimize:clear');
-    Artisan::call('config:cache');
-    return response()->json(['ok' => true, 'message' => '✅ All cache cleared successfully']);
+    try {
+        Artisan::call('config:clear');
+        Artisan::call('cache:clear');
+        Artisan::call('route:clear');
+        Artisan::call('view:clear');
+        // Không chạy optimize:clear hoặc config:cache để tránh lỗi ghi file
+        return response()->json([
+            'ok' => true,
+            'message' => '✅ Cache cleared successfully (safe mode for Render).'
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'ok' => false,
+            'error' => $e->getMessage(),
+        ], 500);
+    }
 });
