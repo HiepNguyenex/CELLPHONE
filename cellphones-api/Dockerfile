@@ -1,5 +1,5 @@
 # ===============================================
-# 🐘 Laravel 12.x - Render Optimized Dockerfile
+# 🐘 Laravel 12.x - Render Optimized Dockerfile (Stable Build)
 # ===============================================
 FROM php:8.2-apache
 
@@ -15,38 +15,48 @@ RUN echo "ServerName localhost" >> /etc/apache2/apache2.conf
 # 2️⃣ Set working directory
 WORKDIR /var/www/html
 
-# 3️⃣ Copy composer files first (for layer caching)
+# 3️⃣ Copy composer files first (for build caching)
 COPY composer.json composer.lock ./
 
-# 4️⃣ Install composer dependencies (cached layer)
+# 4️⃣ Copy Composer binary (from official image)
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
-RUN composer install --no-dev --prefer-dist --optimize-autoloader \
+
+# 5️⃣ Install dependencies without running artisan scripts
+RUN composer install --no-dev --no-scripts --prefer-dist --optimize-autoloader \
  && composer dump-autoload -o
 
-# 5️⃣ Copy project files
+# 6️⃣ Copy project source code
 COPY . .
 
-# 6️⃣ Prepare SQLite
+# 7️⃣ Prepare SQLite database file
 RUN mkdir -p database && touch database/database.sqlite && chmod 777 database/database.sqlite
 
-# 7️⃣ Copy .env if missing
+# 8️⃣ Copy .env if missing
 RUN if [ ! -f ".env" ]; then cp .env.example .env; fi
 
-# 8️⃣ Generate key & cache config
+# 9️⃣ Generate app key & cache config
 RUN php artisan key:generate || true \
  && php artisan config:clear && php artisan cache:clear && php artisan route:clear && php artisan view:clear \
  && php artisan config:cache && php artisan route:cache && php artisan view:cache
 
-# ✅ Apache serve /public
+# ✅ Set Apache to serve the public directory
 RUN sed -i 's|/var/www/html|/var/www/html/public|g' /etc/apache2/sites-available/000-default.conf
 
-# 9️⃣ Render port
+# 🔟 Configure Render port
 EXPOSE 10000
 ENV PORT=10000
 RUN sed -i "s/80/${PORT}/g" /etc/apache2/sites-available/000-default.conf /etc/apache2/ports.conf
 
-# 🔟 Auto migrate + seed at startup
+# 🧩 Add ServerName (suppress warning again)
+RUN echo "ServerName localhost" >> /etc/apache2/apache2.conf
+
+# 🪄 Optional: Clear cache safely at container start
+RUN echo '#!/bin/bash\nphp artisan config:clear && php artisan cache:clear && php artisan route:clear && php artisan view:clear\nexec "$@"' > /entrypoint.sh \
+ && chmod +x /entrypoint.sh
+ENTRYPOINT ["/entrypoint.sh"]
+
+# 🚀 Run migrations + seed + start Apache
 CMD php artisan migrate:fresh --seed --force && apache2-foreground
 
-# 🩺 Healthcheck
+# 🩺 Healthcheck (verify API availability)
 HEALTHCHECK CMD curl -f http://localhost:10000/api/v1/products || exit 1
