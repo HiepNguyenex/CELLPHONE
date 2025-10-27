@@ -1,16 +1,20 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// ✅ Bản chuẩn cho build Vercel (đọc được .env.production)
-export default defineConfig({
-  plugins: [react()],
-  server: {
-    host: 'localhost',
-    port: 5173,
-    cors: true,
-    open: true,
-  },
-  define: {
-    'process.env': process.env, // ⚡ Bắt buộc để Vercel load env
-  },
+export default defineConfig(({ mode }) => {
+  // ✅ Load đúng file .env.production khi build
+  const env = loadEnv(mode, process.cwd(), '')
+
+  return {
+    plugins: [react()],
+    define: {
+      'process.env': env, // ⚡ Bắt buộc để build đọc VITE_API_URL
+    },
+    server: {
+      host: 'localhost',
+      port: 5173,
+      cors: true,
+      open: true,
+    },
+  }
 })
