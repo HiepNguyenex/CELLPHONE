@@ -1,6 +1,5 @@
-# ========================
+# ==========================
 # LOGS
-# ========================
 logs
 *.log
 npm-debug.log*
@@ -9,29 +8,33 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-# ========================
+# ==========================
 # DEPENDENCIES & BUILD
-# ========================
 node_modules
 dist
 dist-ssr
-
-# ========================
-# ENV FILES
-# ========================
-.env                # ❌ Không commit env local
-!.env.production    # ✅ Nhưng vẫn commit env production cho Vercel
 *.local
 
-# ========================
+# ==========================
+# ENV FILES
+.env*              # ❌ Ignore toàn bộ .env*, gồm .env.local, .env.development, v.v.
+!.env.production   # ✅ Nhưng vẫn commit .env.production cho Vercel build
+!.env.example      # ✅ Giữ lại file mẫu nếu có
+
+# ==========================
 # SYSTEM / IDE
-# ========================
 .vscode/*
 !.vscode/extensions.json
 .idea
 .DS_Store
+Thumbs.db
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+
+# ==========================
+# MISC
+*.zip
+*.rar
