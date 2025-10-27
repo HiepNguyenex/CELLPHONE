@@ -273,16 +273,20 @@ Route::get('/__clear-cache', function () {
         Artisan::call('config:clear');
         Artisan::call('cache:clear');
         Artisan::call('route:clear');
-        Artisan::call('view:clear');
-        // Không chạy optimize:clear hoặc config:cache để tránh lỗi ghi file
+
+        // ✅ Chỉ chạy view:clear nếu thư mục tồn tại (tránh lỗi ghi file trên Render)
+        if (is_dir(storage_path('framework/views'))) {
+            @Artisan::call('view:clear');
+        }
+
         return response()->json([
             'ok' => true,
-            'message' => '✅ Cache cleared successfully (safe mode for Render).'
+            'message' => '✅ Cache cleared successfully (Render safe mode).'
         ]);
-    } catch (\Exception $e) {
+    } catch (\Throwable $th) {
         return response()->json([
             'ok' => false,
-            'error' => $e->getMessage(),
+            'error' => $th->getMessage(),
         ], 500);
     }
 });
