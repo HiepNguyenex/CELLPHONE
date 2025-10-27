@@ -1,0 +1,33 @@
+# ===== Ignore system and VCS =====
+.git
+.gitignore
+.env
+.env.local
+.env.production
+node_modules
+npm-debug.log
+yarn-error.log
+pnpm-lock.yaml
+
+# ===== Laravel cache / storage =====
+storage/app/*
+storage/framework/*
+storage/logs/*
+bootstrap/cache/*.php
+
+# ===== Frontend / dev tools =====
+public/hot
+public/storage
+resources/js/*
+resources/css/*
+vite.config.js
+package.json
+
+# ===== Tests & local tools =====
+tests/
+*.md
+*.zip
+*.rar
+.DS_Store
+.idea
+.vscode
