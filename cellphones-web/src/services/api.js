@@ -15,7 +15,7 @@ function toFormData(obj = {}) {
   return fd;
 }
 
-// ✅ Bổ sung cấu hình cookie cho Sanctum
+// ✅ Cấu hình axios có cookie (quan trọng cho Sanctum)
 const api = axios.create({
   baseURL: BASE_URL,
   withCredentials: true, // ✅ Cho phép gửi cookie giữa Render & Vercel
@@ -45,7 +45,10 @@ api.interceptors.response.use(
 // ✅ Hàm helper: đảm bảo có CSRF cookie trước khi gọi API auth
 async function ensureSanctum() {
   try {
-    await api.get("/sanctum/csrf-cookie");
+    // ⚡ FIX QUAN TRỌNG: Laravel Sanctum yêu cầu gọi /sanctum/csrf-cookie
+    // từ domain gốc (không có /api)
+    const csrfUrl = BASE_URL.replace(/\/api$/, "") + "/sanctum/csrf-cookie";
+    await axios.get(csrfUrl, { withCredentials: true });
   } catch (e) {
     console.error("❌ Không thể lấy CSRF cookie:", e);
   }
@@ -196,6 +199,7 @@ export const adminLogout = async () => {
 // DASHBOARD
 export const adminGetDashboard = (params = {}) =>
   api.get("/v1/admin/dashboard", { params });
+
 // PRODUCTS
 export const adminGetProducts = (params = {}) =>
   api.get("/v1/admin/products", { params });
