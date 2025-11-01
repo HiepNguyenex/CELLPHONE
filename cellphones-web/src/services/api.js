@@ -51,8 +51,10 @@ async function ensureSanctum() {
   }
 }
 
+// ✅ Export alias để Login.jsx có thể import getCsrfCookie
+export const getCsrfCookie = ensureSanctum;
+
 // ============================ USER AUTH ==============================
-// ✅ Gọi sanctum trước khi login / register / logout
 export const login = async (data) => {
   await ensureSanctum();
   return api.post("/login", data);
@@ -131,16 +133,12 @@ export const getOrderDetail = (id, signal) =>
 export const cancelOrder = (id) => api.post(`/v1/orders/${id}/cancel`);
 
 // ============================ PAYMENTS ===============================
-
-// 🏦 VNPay
 export const vnpayCreate = (orderId) =>
   api.post("/v1/payment/vnpay/create", { order_id: orderId });
 
-// 💳 Stripe
 export const stripeCreate = (orderId) =>
   api.post("/v1/payment/stripe/create", { order_id: orderId });
 
-// ✅ Kết quả thanh toán (Stripe hoặc VNPay)
 export const getPaymentResult = (orderId, signal) =>
   api.get(`/v1/payment/result/${orderId}`, { signal });
 
@@ -173,7 +171,6 @@ export const getInstallments = (params = {}, signal) =>
 export const quoteInstallment = (payload = {}, signal) =>
   api.post(`/v1/installments/quote`, payload, { signal });
 
-// aliases
 export const getInstallmentPlans = getInstallments;
 export const calcInstallment = (payload = {}, signal) =>
   quoteInstallment(payload, signal);
@@ -187,7 +184,7 @@ export const storeReserve = (payload = {}) =>
 // ============================ ADMIN API =============================
 // AUTH
 export const adminLogin = async (data) => {
-  await ensureSanctum(); // ✅ thêm đảm bảo Sanctum cho admin login
+  await ensureSanctum();
   return api.post("/v1/admin/login", data);
 };
 export const adminMe = () => api.get("/v1/admin/me");
@@ -199,7 +196,6 @@ export const adminLogout = async () => {
 // DASHBOARD
 export const adminGetDashboard = (params = {}) =>
   api.get("/v1/admin/dashboard", { params });
-
 // PRODUCTS
 export const adminGetProducts = (params = {}) =>
   api.get("/v1/admin/products", { params });
