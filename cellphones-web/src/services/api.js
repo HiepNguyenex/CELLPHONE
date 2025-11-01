@@ -15,8 +15,10 @@ function toFormData(obj = {}) {
   return fd;
 }
 
+// ✅ Bổ sung cấu hình cookie cho Sanctum
 const api = axios.create({
   baseURL: BASE_URL,
+  withCredentials: true, // ✅ Cho phép gửi cookie giữa Render & Vercel
   headers: { Accept: "application/json" },
 });
 
@@ -40,11 +42,33 @@ api.interceptors.response.use(
   }
 );
 
+// ✅ Hàm helper: đảm bảo có CSRF cookie trước khi gọi API auth
+async function ensureSanctum() {
+  try {
+    await api.get("/sanctum/csrf-cookie");
+  } catch (e) {
+    console.error("❌ Không thể lấy CSRF cookie:", e);
+  }
+}
+
 // ============================ USER AUTH ==============================
-export const login = (data) => api.post("/login", data);
-export const register = (data) => api.post("/register", data);
+// ✅ Gọi sanctum trước khi login / register / logout
+export const login = async (data) => {
+  await ensureSanctum();
+  return api.post("/login", data);
+};
+
+export const register = async (data) => {
+  await ensureSanctum();
+  return api.post("/register", data);
+};
+
 export const getUser = (signal) => api.get("/v1/user", { signal });
-export const logout = () => api.post("/v1/logout");
+
+export const logout = async () => {
+  await ensureSanctum();
+  return api.post("/v1/logout");
+};
 
 // ============================ CATALOG (PUBLIC) ======================
 export const getProducts = (params = {}, signal) =>
@@ -162,9 +186,15 @@ export const storeReserve = (payload = {}) =>
 
 // ============================ ADMIN API =============================
 // AUTH
-export const adminLogin = (data) => api.post("/v1/admin/login", data);
+export const adminLogin = async (data) => {
+  await ensureSanctum(); // ✅ thêm đảm bảo Sanctum cho admin login
+  return api.post("/v1/admin/login", data);
+};
 export const adminMe = () => api.get("/v1/admin/me");
-export const adminLogout = () => api.post("/v1/admin/logout");
+export const adminLogout = async () => {
+  await ensureSanctum();
+  return api.post("/v1/admin/logout");
+};
 
 // DASHBOARD
 export const adminGetDashboard = (params = {}) =>
