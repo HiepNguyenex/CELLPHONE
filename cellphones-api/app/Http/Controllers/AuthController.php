@@ -10,7 +10,7 @@ use App\Models\User;
 
 class AuthController extends Controller
 {
-    // Đăng ký (đơn giản)
+    // ========== Đăng ký (public) ==========
     public function register(Request $request)
     {
         $data = $request->validate([
@@ -32,7 +32,7 @@ class AuthController extends Controller
         ], 201);
     }
 
-    // Đăng nhập (session-based)
+    // ========== (Giữ) Session-based login nếu sau này dùng chung eTLD ==========
     public function login(Request $request)
     {
         $cred = $request->validate([
@@ -54,13 +54,6 @@ class AuthController extends Controller
         ], 200);
     }
 
-    // Lấy user hiện tại (đã đăng nhập)
-    public function user(Request $request)
-    {
-        return response()->json($request->user());
-    }
-
-    // Đăng xuất
     public function logout(Request $request)
     {
         Auth::guard('web')->logout();
@@ -68,5 +61,48 @@ class AuthController extends Controller
         $request->session()->regenerateToken();
 
         return response()->json(['message' => 'Đăng xuất thành công']);
+    }
+
+    // ========== Bearer token login (KHÔNG cần CSRF) – DÙNG CHO PROD ==========
+    public function apiLogin(Request $request)
+    {
+        $cred = $request->validate([
+            'email'    => ['required','email'],
+            'password' => ['required','string'],
+        ]);
+
+        $user = User::where('email', $cred['email'])->first();
+
+        if (!$user || !Hash::check($cred['password'], $user->password)) {
+            throw ValidationException::withMessages([
+                'email' => ['Sai email hoặc mật khẩu.'],
+            ]);
+        }
+
+        // Tạo personal access token cho client
+        $token = $user->createToken('user_token')->plainTextToken;
+
+        return response()->json([
+            'message' => 'Đăng nhập thành công',
+            'token'   => $token,
+            'user'    => $user,
+        ]);
+    }
+
+    public function apiLogout(Request $request)
+    {
+        // Xoá token hiện tại (route có middleware auth:sanctum)
+        $token = $request->user()->currentAccessToken();
+        if ($token) {
+            $token->delete();
+        }
+
+        return response()->json(['message' => 'Đăng xuất thành công']);
+    }
+
+    // ========== Lấy user hiện tại ==========
+    public function user(Request $request)
+    {
+        return response()->json($request->user());
     }
 }
