@@ -6,6 +6,7 @@ use Illuminate\Foundation\Configuration\Middleware;
 
 // 👇 import thêm Provider mới
 use App\Providers\EventServiceProvider;
+use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -15,10 +16,12 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
+        // ✅ Cho phép Sanctum nhận diện frontend cross-domain (Render <-> Vercel)
+        $middleware->statefulApi();
+
         // 1️⃣ Nhóm middleware cho API
         $middleware->group('api', [
-            // Nếu bạn dùng Sanctum cookie (SPA) giữ dòng này
-            \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
+            EnsureFrontendRequestsAreStateful::class,
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
         ]);
 
