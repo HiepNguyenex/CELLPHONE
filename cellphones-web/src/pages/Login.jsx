@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { getCsrfCookie } from "@/services/api"; // ✅ Bổ sung dòng này
 
 export default function LoginSmember() {
   const { login } = useAuth();
@@ -57,16 +58,23 @@ export default function LoginSmember() {
     "Đặc quyền S-Student/S-Teacher ưu đãi thêm đến 10%",
   ];
 
+  // ✅ Sửa hàm handleSubmit: gọi Sanctum trước login
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+
     if (!identifier || !password) {
       setError("Vui lòng nhập đầy đủ SĐT/email và mật khẩu");
       return;
     }
+
     try {
       setLoading(true);
-      await login(identifier, password); // tùy BE: có thể cần đổi thành loginPhone
+
+      // ✅ Lấy CSRF cookie trước khi login (bắt buộc với Sanctum)
+      await getCsrfCookie();
+
+      await login(identifier, password);
       navigate(next || "/my-account");
     } catch (err) {
       const msg = err?.response?.data?.message || "Thông tin đăng nhập không đúng";
@@ -83,7 +91,6 @@ export default function LoginSmember() {
           {/* ===== LEFT: Promo panel ===== */}
           <div className="hidden lg:flex flex-col justify-between rounded-3xl ring-1 ring-gray-100 bg-white p-8 shadow-sm">
             <div>
-              {/* logos (text-based, không cần ảnh) */}
               <div className="flex items-center gap-3">
                 <div className="whitespace-nowrap inline-flex items-center h-8 rounded-md bg-red-600 px-3 text-white font-bold">
                   cellphone<span className="ml-0.5 rounded bg-white px-1 text-red-600">S</span>
@@ -96,11 +103,11 @@ export default function LoginSmember() {
               <h1 className="mt-6 text-3xl font-extrabold leading-tight text-gray-900">
                 Nhập hội khách hàng thành viên <span className="text-red-600 whitespace-nowrap">SMEMBER</span>
               </h1>
-              <p className="mt-2 text-gray-600">Để không bỏ lỡ các ưu đãi hấp dẫn từ <span className="whitespace-nowrap">CellphoneS</span></p>
+              <p className="mt-2 text-gray-600">
+                Để không bỏ lỡ các ưu đãi hấp dẫn từ <span className="whitespace-nowrap">CellphoneS</span>
+              </p>
 
-              {/* benefit box with bracket corners */}
               <div className="relative mt-6 rounded-3xl bg-gradient-to-b from-gray-50 to-white p-5 ring-1 ring-gray-200">
-                {/* 4 corner brackets */}
                 <span className="pointer-events-none absolute -top-0.5 -left-0.5 h-8 w-8 rounded-tl-3xl border-t-4 border-l-4 border-red-600"></span>
                 <span className="pointer-events-none absolute -top-0.5 -right-0.5 h-8 w-8 rounded-tr-3xl border-t-4 border-r-4 border-red-600"></span>
                 <span className="pointer-events-none absolute -bottom-0.5 -left-0.5 h-8 w-8 rounded-bl-3xl border-b-4 border-l-4 border-red-600"></span>
@@ -120,15 +127,13 @@ export default function LoginSmember() {
                 </Link>
               </div>
             </div>
-
-            {/* Mascot / illustration */}
-            {/* Nếu không có ảnh -> dùng khối gradient tối giản thay thế */}
-        
           </div>
 
           {/* ===== RIGHT: Login form ===== */}
           <div className="rounded-3xl ring-1 ring-gray-100 bg-white p-8 shadow-sm">
-            <h2 className="text-2xl md:text-3xl font-extrabold text-center text-red-600 whitespace-nowrap">Đăng nhập SMEMBER</h2>
+            <h2 className="text-2xl md:text-3xl font-extrabold text-center text-red-600 whitespace-nowrap">
+              Đăng nhập SMEMBER
+            </h2>
 
             <form onSubmit={handleSubmit} className="mt-6 space-y-4 max-w-md mx-auto" noValidate>
               {error && (
@@ -138,12 +143,13 @@ export default function LoginSmember() {
               )}
 
               <div>
-                <label htmlFor="phone" className="text-sm font-medium text-gray-700">Số điện thoại</label>
+                <label htmlFor="phone" className="text-sm font-medium text-gray-700">
+                  Số điện thoại hoặc Email
+                </label>
                 <input
                   id="phone"
-                  type="tel"
-                  inputMode="tel"
-                  placeholder="Nhập số điện thoại của bạn"
+                  type="text"
+                  placeholder="Nhập SĐT hoặc Email của bạn"
                   className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-gray-900 shadow-sm focus:border-red-400 focus:ring-red-400"
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
@@ -151,7 +157,9 @@ export default function LoginSmember() {
               </div>
 
               <div>
-                <label htmlFor="password" className="text-sm font-medium text-gray-700">Mật khẩu</label>
+                <label htmlFor="password" className="text-sm font-medium text-gray-700">
+                  Mật khẩu
+                </label>
                 <div className="relative mt-1">
                   <input
                     id="password"
@@ -180,10 +188,11 @@ export default function LoginSmember() {
               </button>
 
               <div className="text-center text-sm">
-                <Link to="/password-reset" className="text-blue-600 hover:underline whitespace-nowrap">Quên mật khẩu?</Link>
+                <Link to="/password-reset" className="text-blue-600 hover:underline whitespace-nowrap">
+                  Quên mật khẩu?
+                </Link>
               </div>
 
-              {/* Divider */}
               <div className="flex items-center gap-3 text-xs text-gray-500">
                 <span className="h-px flex-1 bg-gray-200" />
                 Hoặc đăng nhập bằng
@@ -206,15 +215,21 @@ export default function LoginSmember() {
               </div>
 
               <div className="text-center text-sm text-gray-700">
-                Bạn chưa có tài khoản? {" "}
-                <Link to="/register" className="font-semibold text-red-600 hover:underline whitespace-nowrap">Đăng ký ngay</Link>
+                Bạn chưa có tài khoản?{" "}
+                <Link to="/register" className="font-semibold text-red-600 hover:underline whitespace-nowrap">
+                  Đăng ký ngay
+                </Link>
               </div>
 
               <div className="pt-1 text-center text-xs text-gray-500">
-                Mua sắm, sửa chữa tại {" "}
-                <a href="https://cellphones.com.vn" className="text-red-600 hover:underline whitespace-nowrap" target="_blank" rel="noreferrer">cellphones.com.vn</a> {" "}
-                và {" "}
-                <a href="https://dienthoaivui.com.vn" className="text-red-600 hover:underline whitespace-nowrap" target="_blank" rel="noreferrer">dienthoaivui.com.vn</a>
+                Mua sắm, sửa chữa tại{" "}
+                <a href="https://cellphones.com.vn" className="text-red-600 hover:underline whitespace-nowrap" target="_blank" rel="noreferrer">
+                  cellphones.com.vn
+                </a>{" "}
+                và{" "}
+                <a href="https://dienthoaivui.com.vn" className="text-red-600 hover:underline whitespace-nowrap" target="_blank" rel="noreferrer">
+                  dienthoaivui.com.vn
+                </a>
               </div>
             </form>
           </div>
