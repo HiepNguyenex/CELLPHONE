@@ -5,7 +5,6 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 
 use App\Providers\EventServiceProvider;
-use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -15,11 +14,8 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        // ✅ Bật Sanctum cross-domain cho Render <-> Vercel
-        $middleware->statefulApi();
-
-        // ⚡ Không override nhóm api thủ công nữa!
-        // Laravel tự thêm EnsureFrontendRequestsAreStateful đúng chỗ
+        // ❌ KHÔNG bật statefulApi khi dùng Bearer token giữa các eTLD khác nhau (Vercel ↔ Render)
+        // $middleware->statefulApi();
 
         // ✅ Alias middleware admin
         $middleware->alias([
