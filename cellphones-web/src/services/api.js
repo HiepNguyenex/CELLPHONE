@@ -5,9 +5,9 @@ const BASE_URL = (
   import.meta?.env?.VITE_API_URL || "http://127.0.0.1:8000/api"
 ).replace(/\/+$/, "");
 
-// ✅ Bổ sung cấu hình cho Sanctum cross-domain
-axios.defaults.xsrfCookieName = "XSRF-TOKEN";
-axios.defaults.xsrfHeaderName = "X-XSRF-TOKEN";
+// ❌ Không cấu hình CSRF/XSRF khi dùng Bearer giữa Vercel ↔ Render
+// axios.defaults.xsrfCookieName = "XSRF-TOKEN";
+// axios.defaults.xsrfHeaderName = "X-XSRF-TOKEN";
 
 // 🔧 Helper: Chuyển object sang FormData
 function toFormData(obj = {}) {
@@ -19,10 +19,10 @@ function toFormData(obj = {}) {
   return fd;
 }
 
-// ✅ Cấu hình axios có cookie (quan trọng cho Sanctum)
+// ✅ KHÔNG gửi cookie cross-site (Sanctum PAT không cần cookie)
 const api = axios.create({
   baseURL: BASE_URL,
-  withCredentials: true, // ✅ Cho phép gửi cookie giữa Render & Vercel
+  withCredentials: false,
   headers: { Accept: "application/json" },
 });
 
@@ -46,38 +46,23 @@ api.interceptors.response.use(
   }
 );
 
-// ✅ Hàm helper: đảm bảo có CSRF cookie trước khi gọi API auth
-async function ensureSanctum() {
-  try {
-    // ⚡ FIX QUAN TRỌNG: Laravel Sanctum yêu cầu gọi /sanctum/csrf-cookie
-    // từ domain gốc (không có /api)
-    const csrfUrl = BASE_URL.replace(/\/api$/, "") + "/sanctum/csrf-cookie";
-    console.log("➡️ Gọi:", csrfUrl);
-    await axios.get(csrfUrl, { withCredentials: true });
-    console.log("✅ CSRF cookie đã được nhận!");
-  } catch (e) {
-    console.error("❌ Không thể lấy CSRF cookie:", e);
-  }
-}
-
-// ✅ Export alias để Login.jsx có thể import getCsrfCookie
+// ✅ Không cần Sanctum csrf-cookie nữa (để tương thích import cũ)
+async function ensureSanctum() {}
 export const getCsrfCookie = ensureSanctum;
 
 // ============================ USER AUTH ==============================
 export const login = async (data) => {
-  await ensureSanctum();
-  return api.post("/login", data);
+  // Bearer token flow
+  return api.post("/v1/login", data);
 };
 
 export const register = async (data) => {
-  await ensureSanctum();
-  return api.post("/register", data);
+  return api.post("/v1/register", data);
 };
 
 export const getUser = (signal) => api.get("/v1/user", { signal });
 
 export const logout = async () => {
-  await ensureSanctum();
   return api.post("/v1/logout");
 };
 
@@ -193,12 +178,10 @@ export const storeReserve = (payload = {}) =>
 // ============================ ADMIN API =============================
 // AUTH
 export const adminLogin = async (data) => {
-  await ensureSanctum();
   return api.post("/v1/admin/login", data);
 };
 export const adminMe = () => api.get("/v1/admin/me");
 export const adminLogout = async () => {
-  await ensureSanctum();
   return api.post("/v1/admin/logout");
 };
 

@@ -2,7 +2,8 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { getCsrfCookie } from "@/services/api"; // ✅ Bổ sung dòng này
+// ❌ BỎ gọi CSRF
+// import { getCsrfCookie } from "@/services/api";
 
 export default function LoginSmember() {
   const { login } = useAuth();
@@ -17,7 +18,7 @@ export default function LoginSmember() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // ===== Icons (inline, không phụ thuộc ảnh ngoài) =====
+  // ===== Icons =====
   const Eye = ({ open }) => (
     <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" aria-hidden>
       {open ? (
@@ -58,7 +59,6 @@ export default function LoginSmember() {
     "Đặc quyền S-Student/S-Teacher ưu đãi thêm đến 10%",
   ];
 
-  // ✅ Sửa hàm handleSubmit: gọi Sanctum trước login
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
@@ -71,9 +71,7 @@ export default function LoginSmember() {
     try {
       setLoading(true);
 
-      // ✅ Lấy CSRF cookie trước khi login (bắt buộc với Sanctum)
-      await getCsrfCookie();
-
+      // ❌ KHÔNG gọi getCsrfCookie(); dùng Bearer
       await login(identifier, password);
       navigate(next || "/my-account");
     } catch (err) {
@@ -88,7 +86,7 @@ export default function LoginSmember() {
     <div className="min-h-[calc(100vh-120px)] bg-white">
       <div className="mx-auto max-w-[1280px] px-4 md:px-6 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
-          {/* ===== LEFT: Promo panel ===== */}
+          {/* LEFT */}
           <div className="hidden lg:flex flex-col justify-between rounded-3xl ring-1 ring-gray-100 bg-white p-8 shadow-sm">
             <div>
               <div className="flex items-center gap-3">
@@ -129,7 +127,7 @@ export default function LoginSmember() {
             </div>
           </div>
 
-          {/* ===== RIGHT: Login form ===== */}
+          {/* RIGHT */}
           <div className="rounded-3xl ring-1 ring-gray-100 bg-white p-8 shadow-sm">
             <h2 className="text-2xl md:text-3xl font-extrabold text-center text-red-600 whitespace-nowrap">
               Đăng nhập SMEMBER
