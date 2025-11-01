@@ -5,6 +5,10 @@ const BASE_URL = (
   import.meta?.env?.VITE_API_URL || "http://127.0.0.1:8000/api"
 ).replace(/\/+$/, "");
 
+// ✅ Bổ sung cấu hình cho Sanctum cross-domain
+axios.defaults.xsrfCookieName = "XSRF-TOKEN";
+axios.defaults.xsrfHeaderName = "X-XSRF-TOKEN";
+
 // 🔧 Helper: Chuyển object sang FormData
 function toFormData(obj = {}) {
   const fd = new FormData();
@@ -48,7 +52,9 @@ async function ensureSanctum() {
     // ⚡ FIX QUAN TRỌNG: Laravel Sanctum yêu cầu gọi /sanctum/csrf-cookie
     // từ domain gốc (không có /api)
     const csrfUrl = BASE_URL.replace(/\/api$/, "") + "/sanctum/csrf-cookie";
+    console.log("➡️ Gọi:", csrfUrl);
     await axios.get(csrfUrl, { withCredentials: true });
+    console.log("✅ CSRF cookie đã được nhận!");
   } catch (e) {
     console.error("❌ Không thể lấy CSRF cookie:", e);
   }
@@ -219,7 +225,11 @@ export const adminGetProduct = (id) => api.get(`/v1/admin/products/${id}`);
 export const adminGetProductImages = (productId) =>
   api.get(`/v1/admin/products/${productId}/images`);
 
-export const adminUploadProductImage = (productId, fileOrUrl, isPrimary = false) => {
+export const adminUploadProductImage = (
+  productId,
+  fileOrUrl,
+  isPrimary = false
+) => {
   const fd = new FormData();
   if (fileOrUrl instanceof File) fd.append("image", fileOrUrl);
   else fd.append("url", String(fileOrUrl));
