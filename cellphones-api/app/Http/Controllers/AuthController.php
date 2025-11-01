@@ -3,57 +3,58 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use App\Models\User;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
+use App\Models\User;
 
 class AuthController extends Controller
 {
-    // Đăng ký
+    // Đăng ký (đơn giản)
     public function register(Request $request)
     {
-        $request->validate([
-            'name' => 'required|string',
-            'email' => 'required|email|unique:users',
-            'password' => 'required|min:6',
+        $data = $request->validate([
+            'name'     => ['required','string','max:255'],
+            'email'    => ['required','email','max:255','unique:users,email'],
+            'password' => ['required','string','min:6'],
         ]);
 
         $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
-            'role' => 'user',
+            'name'     => $data['name'],
+            'email'    => $data['email'],
+            'password' => Hash::make($data['password']),
+            'role'     => 'user',
         ]);
 
-        return response()->json(['message' => 'Đăng ký thành công', 'user' => $user], 201);
+        return response()->json([
+            'message' => 'Đăng ký thành công',
+            'user'    => $user,
+        ], 201);
     }
 
-    // Đăng nhập
+    // Đăng nhập (session-based)
     public function login(Request $request)
     {
-        $request->validate([
-            'email' => 'required|email',
-            'password' => 'required',
+        $cred = $request->validate([
+            'email'    => ['required','email'],
+            'password' => ['required','string'],
         ]);
 
-        $user = User::where('email', $request->email)->first();
-
-        if (!$user || !Hash::check($request->password, $user->password)) {
+        if (!Auth::attempt($cred)) {
             throw ValidationException::withMessages([
                 'email' => ['Sai email hoặc mật khẩu.'],
             ]);
         }
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+        $request->session()->regenerate();
 
         return response()->json([
             'message' => 'Đăng nhập thành công',
-            'token' => $token,
-            'user' => $user
-        ]);
+            'user'    => Auth::user(),
+        ], 200);
     }
 
-    // Lấy thông tin user đang đăng nhập
+    // Lấy user hiện tại (đã đăng nhập)
     public function user(Request $request)
     {
         return response()->json($request->user());
@@ -62,7 +63,10 @@ class AuthController extends Controller
     // Đăng xuất
     public function logout(Request $request)
     {
-        $request->user()->tokens()->delete();
+        Auth::guard('web')->logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
         return response()->json(['message' => 'Đăng xuất thành công']);
     }
 }
