@@ -2,6 +2,16 @@ import { createContext, useContext, useState, useEffect, useMemo } from "react";
 
 const CartContext = createContext();
 
+function makeLineKey(product) {
+  return JSON.stringify({
+    id: product.id,
+    variant_id: product.variant_id || null,
+    addons: Array.isArray(product?.services?.warranty_options)
+      ? [...product.services.warranty_options].sort()
+      : [],
+  });
+}
+
 export function CartProvider({ children }) {
   const [cart, setCart] = useState(() => {
     const saved = localStorage.getItem("cart");
@@ -12,19 +22,23 @@ export function CartProvider({ children }) {
     localStorage.setItem("cart", JSON.stringify(cart));
   }, [cart]);
 
+  // ⚡ Tạo "lineId" duy nhất cho mỗi dòng (id + variant + addons)
   const addToCart = (product) => {
     setCart((prev) => {
-      const exists = prev.find((item) => item.id === product.id);
-      if (exists) {
-        return prev.map((item) =>
-          item.id === product.id ? { ...item, qty: Number(item.qty || 0) + 1 } : item
-        );
+      const lineId = makeLineKey(product);
+      const idx = prev.findIndex((it) => it.lineId === lineId);
+
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], qty: Number(next[idx].qty || 0) + 1 };
+        return next;
       }
-      // đồng bộ ảnh: lấy product.image_url
+
       return [
         ...prev,
         {
           ...product,
+          lineId,
           qty: 1,
           image: product.image_url || "https://via.placeholder.com/150x150?text=No+Image",
         },
@@ -32,28 +46,36 @@ export function CartProvider({ children }) {
     });
   };
 
-  const updateQty = (id, qty) => {
+  // ⚡ Dựa theo lineId — KHÔNG dùng product id nữa
+  const updateQty = (lineId, qty) => {
     setCart((prev) =>
       prev.map((it) =>
-        it.id === id ? { ...it, qty: Math.max(1, Number(qty) || 1) } : it
+        it.lineId === lineId
+          ? { ...it, qty: Math.max(1, Number(qty) || 1) }
+          : it
       )
     );
   };
 
-  const removeFromCart = (id) => {
-    setCart((prev) => prev.filter((item) => item.id !== id));
-  };
+  const removeFromCart = (lineId) =>
+    setCart((prev) => prev.filter((item) => item.lineId !== lineId));
 
   const clearCart = () => setCart([]);
 
   const total = useMemo(
-    () => cart.reduce((s, it) => s + Number(it.price || 0) * Number(it.qty || 0), 0),
+    () => cart.reduce((s, it) => s + Number(it.price || it.final_price || it.sale_price || 0) * Number(it.qty || 0), 0),
     [cart]
   );
-  const count = useMemo(() => cart.reduce((s, it) => s + Number(it.qty || 0), 0), [cart]);
+
+  const count = useMemo(
+    () => cart.reduce((s, it) => s + Number(it.qty || 0), 0),
+    [cart]
+  );
 
   return (
-    <CartContext.Provider value={{ cart, addToCart, updateQty, removeFromCart, clearCart, total, count }}>
+    <CartContext.Provider
+      value={{ cart, addToCart, updateQty, removeFromCart, clearCart, total, count }}
+    >
       {children}
     </CartContext.Provider>
   );

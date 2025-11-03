@@ -47,6 +47,26 @@ const Icon = ({ name, className = "size-4" }) => {
   }
 };
 
+// ✅ Chuẩn hoá điều kiện hết hàng
+function isSoldOut(p) {
+  // 1) Nếu BE đã trả boolean
+  if (typeof p?.in_stock === "boolean") return !p.in_stock;
+
+  // 2) Dựa vào các trường tổng tồn có thể có
+  const nums = [p?.stock_total, p?.stock_sum, p?.stock]
+    .map((v) => Number(v))
+    .filter((v) => Number.isFinite(v));
+  if (nums.length) return Math.max(...nums) <= 0;
+
+  // 3) Cuối cùng mới dựa vào status
+  const status = String(p?.status || "").toLowerCase();
+  const OUT = ["out_of_stock", "out-of-stock", "sold_out", "sold-out"];
+  if (OUT.includes(status)) return true;
+
+  // 4) Không đủ dữ liệu → không hiện “hết hàng”
+  return false;
+}
+
 export default function ProductCard({ product }) {
   const { addToCart } = useCart();
   const { addToCompare } = useCompare();
@@ -55,10 +75,14 @@ export default function ProductCard({ product }) {
   const sale = product?.sale_price != null ? Number(product.sale_price) : null;
   const finalPrice = sale != null && sale < price ? sale : price;
   const hasSale = sale != null && sale < price && price > 0;
-  const discountPct = useMemo(() => (hasSale ? Math.round(((price - sale) / price) * 100) : 0), [hasSale, price, sale]);
+  const discountPct = useMemo(
+    () => (hasSale ? Math.round(((price - sale) / price) * 100) : 0),
+    [hasSale, price, sale]
+  );
   const rating = Number(product?.rating_avg || 0);
   const ratingCount = Number(product?.rating_count || 0);
-  const stock = Number(product?.stock ?? 0);
+
+  const soldOut = isSoldOut(product); // ✅ dùng hàm mới
 
   const [imgSrc, setImgSrc] = useState(
     resolveImg(product?.image_url || product?.image)
@@ -128,7 +152,7 @@ export default function ProductCard({ product }) {
               New
             </span>
           )}
-          {stock <= 0 && (
+          {soldOut && (
             <span className="absolute inset-0 grid place-items-center bg-white/70 text-sm font-semibold text-red-600">
               Tạm hết hàng
             </span>
@@ -169,11 +193,11 @@ export default function ProductCard({ product }) {
       <div className="mt-3 grid grid-cols-2 gap-2">
         <button
           onClick={handleAdd}
-          disabled={stock <= 0}
+          disabled={soldOut}
           className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium text-white shadow-sm transition ${
-            stock > 0 ? "bg-red-600 hover:bg-red-700" : "bg-red-300 cursor-not-allowed"
+            !soldOut ? "bg-red-600 hover:bg-red-700" : "bg-red-300 cursor-not-allowed"
           }`}
-          aria-disabled={stock <= 0}
+          aria-disabled={soldOut}
         >
           <Icon name="cart" /> Mua ngay
         </button>

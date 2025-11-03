@@ -1,4 +1,3 @@
-// src/pages/Cart.jsx
 import { useState, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
@@ -41,7 +40,7 @@ export default function Cart() {
       compareAt += base * qty;
 
       const w = Number(it?.services?.warranty_amount ?? 0);
-      warranty += w;
+      warranty += w * qty; // ⚡ tính theo số lượng
     });
 
     const discount = Math.max(compareAt - subtotal, 0);
@@ -128,11 +127,11 @@ export default function Cart() {
 
                 const onChangeQty = (next) => {
                   const n = clampInt(next, 1, maxQty);
-                  updateQty(item.id, n);
+                  updateQty(item.lineId, n); // ⚡ Dùng lineId
                 };
 
                 return (
-                  <li key={item.id} className="p-4 md:p-5">
+                  <li key={item.lineId} className="p-4 md:p-5">
                     <div className="flex items-start gap-4">
                       <img
                         src={resolveImg(item.image_url || item.image)}
@@ -197,7 +196,7 @@ export default function Cart() {
                             <button
                               onClick={() =>
                                 confirm("Xoá sản phẩm khỏi giỏ?") &&
-                                removeFromCart(item.id)
+                                removeFromCart(item.lineId) // ⚡ Dùng lineId
                               }
                               className="text-xs text-rose-600 hover:underline"
                             >

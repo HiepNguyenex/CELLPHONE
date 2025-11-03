@@ -13,6 +13,19 @@ class OrderItem extends Model
         'order_id','product_id','name','price','qty','image_url'
     ];
 
-    public function order()  { return $this->belongsTo(Order::class); }
-    public function product(){ return $this->belongsTo(Product::class); }
+    public function order()
+    {
+        return $this->belongsTo(Order::class);
+    }
+
+    public function product()
+    {
+        return $this->belongsTo(Product::class);
+    }
+
+    // ✅ THÊM: addons mua kèm (bảo hành/bảo hiểm…)
+    public function addons()
+    {
+        return $this->hasMany(OrderItemAddon::class);
+    }
 }

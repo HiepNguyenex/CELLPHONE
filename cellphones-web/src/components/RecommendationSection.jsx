@@ -36,7 +36,7 @@ export default function RecommendationSection({ brandId, categoryId }) {
 
   return (
     <section className="mt-10 px-2 md:px-0">
-      <h2 className="text-lg font-semibold mb-3">🧠 Gợi ý cho bạn</h2>
+      <h2 className="text-lg font-semibold mb-3">Gợi ý cho bạn</h2>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
         {recs.map((p) => (

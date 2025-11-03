@@ -2,51 +2,34 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 
 class WarrantyPlan extends Model
 {
     use HasFactory;
+
+    protected $table = 'warranty_plans';
 
     protected $fillable = [
         'product_id',
         'category_id',
         'brand_id',
         'name',
-        'slug',
         'type',
         'months',
-        'price',
-        'active',
+        'price',      // integer VND
+        'is_active',  // ✅ dùng đúng cột trong migration
     ];
 
     protected $casts = [
-        'months' => 'integer',
-        'price'  => 'float',   // nếu bạn muốn lưu VND nguyên, đổi migration + cast thành 'integer'
-        'active' => 'boolean',
+        'months'    => 'integer',
+        'price'     => 'integer',
+        'is_active' => 'boolean',
     ];
 
+    // Quan hệ cơ bản (tuỳ dự án có/không)
     public function product()  { return $this->belongsTo(Product::class); }
     public function category() { return $this->belongsTo(Category::class); }
     public function brand()    { return $this->belongsTo(Brand::class); }
-
-    public function scopeActive($q) { return $q->where('active', true); }
-
-    public static function queryForProduct(Product $p)
-    {
-        return static::query()
-            ->active()
-            ->where(function ($q) use ($p) {
-                $q->where('product_id', $p->id)
-                  ->orWhere(function ($q2) use ($p) {
-                      $q2->whereNull('product_id')
-                         ->where('category_id', $p->category_id);
-                  })
-                  ->orWhere(function ($q3) use ($p) {
-                      $q3->whereNull('product_id')
-                         ->where('brand_id', $p->brand_id);
-                  });
-            });
-    }
 }

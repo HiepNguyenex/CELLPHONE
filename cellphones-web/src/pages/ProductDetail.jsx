@@ -1,4 +1,3 @@
-// src/pages/ProductDetail.jsx
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { useCart } from "../context/CartContext";
@@ -27,7 +26,6 @@ import ReviewForm from "../components/product/ReviewForm";
 import ProductBundles from "../components/product/ProductBundles";
 import ShopPolicies from "../components/ShopPolicies";
 
-// NEW boxes
 import InstallmentBox from "../components/product/InstallmentBox";
 import WarrantyUpsell from "../components/product/WarrantyUpsell";
 import StoreAvailability from "../components/product/StoreAvailability";
@@ -64,11 +62,9 @@ export default function ProductDetail() {
   const [selectedAttrs, setSelectedAttrs] = useState({});
   const [selectedVariant, setSelectedVariant] = useState(null);
 
-  // NEW – upsell
-  const [warrantyPicked, setWarrantyPicked] = useState([]); // id[]
+  const [warrantyPicked, setWarrantyPicked] = useState([]);
   const [warrantyTotal, setWarrantyTotal] = useState(0);
 
-  // UI: sticky mobile bar visibility
   const [showStickyBar, setShowStickyBar] = useState(false);
   useEffect(() => {
     const onScroll = () => setShowStickyBar(window.scrollY > 400);
@@ -112,14 +108,12 @@ export default function ProductDetail() {
         if (data?.name) document.title = `${data.name} | Cellphones Clone`;
       })
       .catch((err) => {
-        if (err?.name !== "CanceledError")
-          console.error("Lỗi khi tải sản phẩm:", err);
+        if (err?.name !== "CanceledError") console.error("Lỗi khi tải sản phẩm:", err);
       })
       .finally(() => !ac.signal.aborted && setLoading(false));
 
     return () => ac.abort();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  }, [id, addViewed]);
 
   // =============== REVIEWS ===============
   const fetchReviews = (pageNum = 1, ratingFilter = null) => {
@@ -245,10 +239,9 @@ export default function ProductDetail() {
 
   if (loading) return <SkeletonProductDetail />;
 
-  if (!product)
-    return (
-      <p className="text-center mt-10 text-gray-600">❌ Không tìm thấy sản phẩm.</p>
-    );
+  if (!product) {
+    return <p className="text-center mt-10 text-gray-600">❌ Không tìm thấy sản phẩm.</p>;
+  }
 
   const gallery = product?.images?.length
     ? product.images
@@ -256,7 +249,6 @@ export default function ProductDetail() {
     ? [{ url: resolveImg(product.image_url), is_primary: true, position: 0 }]
     : [];
 
-  // Small UI helpers
   const StockBadge = () => (
     <span
       className={`px-2 py-1 rounded-full text-xs font-medium inline-flex items-center gap-1 ring-1 ${
@@ -281,10 +273,7 @@ export default function ProductDetail() {
           {product.category && (
             <li className="flex items-center gap-1">
               <span className="text-gray-400">/</span>
-              <Link
-                to={`/search?category_id=${product.category.id}`}
-                className="hover:text-red-600"
-              >
+              <Link to={`/search?category_id=${product.category.id}`} className="hover:text-red-600">
                 {product.category.name}
               </Link>
             </li>
@@ -292,10 +281,7 @@ export default function ProductDetail() {
           {product.brand && (
             <li className="flex items-center gap-1">
               <span className="text-gray-400">/</span>
-              <Link
-                to={`/search?brand_id=${product.brand.id}`}
-                className="hover:text-red-600"
-              >
+              <Link to={`/search?brand_id=${product.brand.id}`} className="hover:text-red-600">
                 {product.brand.name}
               </Link>
             </li>
@@ -306,9 +292,9 @@ export default function ProductDetail() {
         </ol>
       </nav>
 
-      {/* =================== MAIN LAYOUT (Specs on LEFT) =================== */}
+      {/* MAIN */}
       <div className="grid grid-cols-1 lg:grid-cols-[560px_minmax(0,1fr)] gap-8 lg:gap-10 items-start">
-        {/* LEFT: Gallery (sticky) + Specs */}
+        {/* LEFT */}
         <div className="flex flex-col gap-6">
           <div className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100">
             <div className="lg:sticky top-24 p-3 md:p-4">
@@ -316,7 +302,6 @@ export default function ProductDetail() {
             </div>
           </div>
 
-          {/* THÔNG SỐ KỸ THUẬT */}
           <div className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 md:p-6">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs text-gray-500">#{product?.sku || product?.id}</span>
@@ -325,7 +310,7 @@ export default function ProductDetail() {
           </div>
         </div>
 
-        {/* RIGHT: Info, price, CTA, boxes */}
+        {/* RIGHT */}
         <div className="space-y-4">
           <div className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 md:p-6">
             <h1 className="text-2xl md:text-3xl font-bold tracking-tight mb-2">
@@ -358,10 +343,7 @@ export default function ProductDetail() {
               {product.brand && (
                 <span>
                   Thương hiệu:{" "}
-                  <Link
-                    to={`/search?brand_id=${product.brand.id}`}
-                    className="font-medium text-blue-600 hover:underline"
-                  >
+                  <Link to={`/search?brand_id=${product.brand.id}`} className="font-medium text-blue-600 hover:underline">
                     {product.brand.name}
                   </Link>
                 </span>
@@ -369,10 +351,7 @@ export default function ProductDetail() {
               {product.category && (
                 <span>
                   Danh mục:{" "}
-                  <Link
-                    to={`/search?category_id=${product.category.id}`}
-                    className="font-medium text-blue-600 hover:underline"
-                  >
+                  <Link to={`/search?category_id=${product.category.id}`} className="font-medium text-blue-600 hover:underline">
                     {product.category.name}
                   </Link>
                 </span>
@@ -389,15 +368,9 @@ export default function ProductDetail() {
                 <div className="mt-3 text-sm text-gray-600 rounded-lg bg-gray-50 p-3 flex flex-wrap gap-4">
                   {matchedVariant ? (
                     <>
-                      <div>
-                        SKU: <span className="font-medium">{matchedVariant.sku || "—"}</span>
-                      </div>
-                      <div>
-                        Biến thể: <span className="font-medium">{matchedVariant.name || "—"}</span>
-                      </div>
-                      <div>
-                        Tồn kho: <span className="font-medium">{matchedVariant.stock}</span>
-                      </div>
+                      <div>SKU: <span className="font-medium">{matchedVariant.sku || "—"}</span></div>
+                      <div>Biến thể: <span className="font-medium">{matchedVariant.name || "—"}</span></div>
+                      <div>Tồn kho: <span className="font-medium">{matchedVariant.stock}</span></div>
                     </>
                   ) : (
                     <div>Hãy chọn đủ các tuỳ chọn bên trên.</div>
@@ -437,9 +410,7 @@ export default function ProductDetail() {
                   onClick={handleAddToCart}
                   disabled={!canAddToCart}
                   className={`inline-flex items-center justify-center px-6 py-3 rounded-xl text-white shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2 ${
-                    canAddToCart
-                      ? "bg-red-600 hover:bg-red-700 active:scale-[0.99]"
-                      : "bg-red-300 cursor-not-allowed"
+                    canAddToCart ? "bg-red-600 hover:bg-red-700 active:scale-[0.99]" : "bg-red-300 cursor-not-allowed"
                   }`}
                   title={
                     !canAddToCart
@@ -456,13 +427,10 @@ export default function ProductDetail() {
             </div>
 
             {product.description && (
-              <p className="mt-4 text-gray-700 leading-relaxed">
-                {product.description}
-              </p>
+              <p className="mt-4 text-gray-700 leading-relaxed">{product.description}</p>
             )}
           </div>
 
-          {/* Boxes bên phải */}
           <InstallmentBox price={displayPrice} productId={product.id} />
 
           <WarrantyUpsell
@@ -476,7 +444,6 @@ export default function ProductDetail() {
           <StoreAvailability productId={product.id} />
         </div>
       </div>
-      {/* =================== END MAIN LAYOUT =================== */}
 
       {/* Bundles */}
       <section className="mt-10">
@@ -528,7 +495,7 @@ export default function ProductDetail() {
         <ShopPolicies />
       </section>
 
-      {/* Sticky mobile add-to-cart bar */}
+      {/* Sticky mobile bar */}
       <div
         className={`lg:hidden fixed bottom-0 inset-x-0 z-40 border-t bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/60 shadow-lg transition-transform ${
           showStickyBar ? "translate-y-0" : "translate-y-full"
