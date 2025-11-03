@@ -1,3 +1,4 @@
+// === FILE: src/services/api.js ===
 import axios from "axios";
 
 // ============================ BASE CONFIG ============================
@@ -145,6 +146,17 @@ export const storeAvailability = (params = {}, signal) =>
 export const storeReserve = (payload = {}) =>
   api.post(`/v1/stores/reserve`, payload);
 
+// ============================ NEWS (NEW) ============================
+// ✅ THÊM: API Tin tức cho FE
+export async function getNews({ page = 1, limit = 10 } = {}, signal) {
+  const res = await api.get("/v1/news", { params: { page, limit }, signal });
+  return res.data; // { data: [], meta: {...} }
+}
+
+export async function getNewsDetail(slug, signal) {
+  const res = await api.get(`/v1/news/${slug}`, { signal });
+  return res.data; // item
+}
 // ============================ ADMIN API =============================
 // AUTH
 export const adminLogin = (data) => api.post("/v1/admin/login", data);
@@ -325,3 +337,4 @@ export const adminDeleteInstallment = (id) =>
   api.delete(`/v1/admin/installments/${id}`);
 
 export default api;
+// === KẾT FILE: src/services/api.js ===

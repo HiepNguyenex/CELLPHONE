@@ -1,11 +1,10 @@
-import { Routes, Route, useLocation } from "react-router-dom";
+// === FILE: src/App.jsx ===
+import { Routes, Route, useLocation, Navigate, useParams } from "react-router-dom";
 
 // ==== PAGES (USER) ====
 import Home from "./pages/Home";
 import About from "./pages/About";
 import Contact from "./pages/Contact";
-import Blog from "./pages/Blog";
-import Article from "./pages/Article";
 import FAQ from "./pages/FAQ";
 import Cart from "./pages/Cart";
 import Checkout from "./pages/Checkout";
@@ -24,7 +23,11 @@ import Privacy from "./pages/Privacy";
 import NotFound from "./pages/NotFound";
 import PasswordReset from "./pages/PasswordReset";
 import Compare from "./pages/Compare";
-import PaymentResult from "./pages/PaymentResult"; // ✅ Stripe result page
+import PaymentResult from "./pages/PaymentResult";
+
+// ✅ Tin tức
+import NewsList from "./pages/NewsList";
+import NewsDetail from "./pages/NewsDetail";
 
 // ==== COMPONENTS ====
 import Topbar from "./components/Topbar";
@@ -56,6 +59,13 @@ import { ToastProvider } from "./components/Toast";
 import { CompareProvider } from "./context/CompareContext";
 import { ViewedProvider } from "./context/ViewedContext";
 
+// Redirect legacy /blog → /news
+function LegacyBlogRedirect() { return <Navigate to="/news" replace />; }
+function LegacyBlogSlugRedirect() {
+  const { slug } = useParams();
+  return <Navigate to={`/news/${slug}`} replace />;
+}
+
 export default function App() {
   const location = useLocation();
   const isAdminRoute = location.pathname.startsWith("/admin");
@@ -78,8 +88,6 @@ export default function App() {
                 <Route path="/" element={<Home />} />
                 <Route path="/about" element={<About />} />
                 <Route path="/contact" element={<Contact />} />
-                <Route path="/blog" element={<Blog />} />
-                <Route path="/article/:id" element={<Article />} />
                 <Route path="/faq" element={<FAQ />} />
                 <Route path="/product/:id" element={<ProductDetail />} />
                 <Route path="/search" element={<Search />} />
@@ -87,7 +95,15 @@ export default function App() {
                 <Route path="/cart" element={<Cart />} />
                 <Route path="/checkout" element={<Checkout />} />
                 <Route path="/thankyou" element={<ThankYou />} />
-                <Route path="/payment/result" element={<PaymentResult />} /> {/* ✅ Stripe return */}
+                <Route path="/payment/result" element={<PaymentResult />} />
+
+                {/* ✅ NEWS */}
+                <Route path="/news" element={<NewsList />} />
+                <Route path="/news/:slug" element={<NewsDetail />} />
+
+                {/* ✅ Redirect /blog → /news */}
+                <Route path="/blog" element={<LegacyBlogRedirect />} />
+                <Route path="/blog/:slug" element={<LegacyBlogSlugRedirect />} />
 
                 {/* ==== AUTH ==== */}
                 <Route path="/login" element={<Login />} />
@@ -177,3 +193,4 @@ export default function App() {
     </AuthProvider>
   );
 }
+// === KẾT FILE: src/App.jsx ===
