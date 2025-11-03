@@ -5,6 +5,7 @@ namespace Database\Factories;
 use App\Models\News;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
+use Faker\Factory as FakerFactory; // ✅ dùng trực tiếp Factory của Faker
 
 class NewsFactory extends Factory
 {
@@ -12,10 +13,13 @@ class NewsFactory extends Factory
 
     public function definition(): array
     {
-        $title = $this->faker->sentence(mt_rand(6, 12));
+        // ✅ Tạo instance Faker thủ công để đảm bảo luôn tồn tại
+        $faker = FakerFactory::create('vi_VN');
+
+        $title = $faker->sentence(mt_rand(6, 12));
         $slug  = Str::slug($title) . '-' . Str::lower(Str::random(6));
 
-        $paras = $this->faker->paragraphs(mt_rand(4, 7));
+        $paras = $faker->paragraphs(mt_rand(4, 7));
         $html  = '<p>' . implode('</p><p>', $paras) . '</p>';
 
         $sources = [
@@ -34,12 +38,12 @@ class NewsFactory extends Factory
         return [
             'title'        => $title,
             'slug'         => $slug,
-            'excerpt'      => $this->faker->text(140),
+            'excerpt'      => $faker->text(140),
             'content_html' => $html,
-            'image_url'    => 'https://picsum.photos/seed/' . $this->faker->numberBetween(1, 999999) . '/800/450',
+            'image_url'    => 'https://picsum.photos/seed/' . $faker->numberBetween(1, 999999) . '/800/450',
             'source_url'   => $sourceUrl,
             'source_name'  => $src['name'],
-            'published_at' => $this->faker->dateTimeBetween('-10 days', 'now'),
+            'published_at' => $faker->dateTimeBetween('-10 days', 'now'),
             'tags'         => json_encode(['tin tức', 'seed']),
             'status'       => 'publish',
         ];
