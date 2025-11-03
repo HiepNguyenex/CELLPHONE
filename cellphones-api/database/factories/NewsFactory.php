@@ -5,17 +5,21 @@ namespace Database\Factories;
 use App\Models\News;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
+use Faker\Generator as Faker; // ✅ THÊM DÒNG NÀY
 
-/**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\News>
- */
 class NewsFactory extends Factory
 {
     protected $model = News::class;
 
+    // ✅ THÊM CONSTRUCTOR NÀY
+    public function __construct(Faker $faker)
+    {
+        parent::__construct();
+        $this->faker = $faker;
+    }
+
     public function definition(): array
     {
-        // ✅ dùng $this->faker thay vì fake()
         $title = $this->faker->sentence(mt_rand(6, 12));
         $slug  = Str::slug($title) . '-' . Str::lower(Str::random(6));
 
