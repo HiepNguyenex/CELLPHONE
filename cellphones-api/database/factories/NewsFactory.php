@@ -6,19 +6,22 @@ use App\Models\News;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
+/**
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\News>
+ */
 class NewsFactory extends Factory
 {
     protected $model = News::class;
 
     public function definition(): array
     {
-        $title = fake()->sentence(mt_rand(6, 12));
+        // ✅ dùng $this->faker thay vì fake()
+        $title = $this->faker->sentence(mt_rand(6, 12));
         $slug  = Str::slug($title) . '-' . Str::lower(Str::random(6));
 
-        $paras = fake()->paragraphs(mt_rand(4, 7));
+        $paras = $this->faker->paragraphs(mt_rand(4, 7));
         $html  = '<p>' . implode('</p><p>', $paras) . '</p>';
 
-        // Nguồn tiếng Việt + URL duy nhất (tránh đụng unique(source_url))
         $sources = [
             ['url' => 'https://vnexpress.net', 'name' => 'VnExpress'],
             ['url' => 'https://dantri.com.vn',  'name' => 'Dân Trí'],
@@ -34,12 +37,12 @@ class NewsFactory extends Factory
         return [
             'title'        => $title,
             'slug'         => $slug,
-            'excerpt'      => fake()->text(140),
+            'excerpt'      => $this->faker->text(140),
             'content_html' => $html,
-            'image_url'    => 'https://picsum.photos/seed/' . fake()->numberBetween(1, 999999) . '/800/450',
-            'source_url'   => $sourceUrl,   // ✅ luôn khác nhau
+            'image_url'    => 'https://picsum.photos/seed/' . $this->faker->numberBetween(1, 999999) . '/800/450',
+            'source_url'   => $sourceUrl,
             'source_name'  => $src['name'],
-            'published_at' => fake()->dateTimeBetween('-10 days', 'now'),
+            'published_at' => $this->faker->dateTimeBetween('-10 days', 'now'),
             'tags'         => json_encode(['tin tức', 'seed']),
             'status'       => 'publish',
         ];
