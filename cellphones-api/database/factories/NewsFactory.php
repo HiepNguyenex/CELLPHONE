@@ -1,5 +1,4 @@
 <?php
-// === FILE: database/factories/NewsFactory.php ===
 
 namespace Database\Factories;
 
@@ -13,38 +12,36 @@ class NewsFactory extends Factory
 
     public function definition(): array
     {
-        $title   = $this->faker->unique()->sentence(8);
-        $slug    = Str::limit(Str::slug($title) . '-' . Str::lower(Str::random(6)), 180, '');
+        $title = fake()->sentence(mt_rand(6, 12));
+        $slug  = Str::slug($title) . '-' . Str::lower(Str::random(6));
 
-        // Nguồn tiếng Việt
-        $domains = [
-            ['host' => 'vnexpress.net',  'name' => 'VnExpress'],
-            ['host' => 'zingnews.vn',    'name' => 'ZingNews'],
-            ['host' => 'tuoitre.vn',     'name' => 'Tuổi Trẻ'],
-            ['host' => 'thanhnien.vn',   'name' => 'Thanh Niên'],
-            ['host' => 'genk.vn',        'name' => 'GenK'],
-            ['host' => 'dantri.com.vn',  'name' => 'Dân Trí'],
-            ['host' => 'vietnamnet.vn',  'name' => 'VietNamNet'],
+        $paras = fake()->paragraphs(mt_rand(4, 7));
+        $html  = '<p>' . implode('</p><p>', $paras) . '</p>';
+
+        // Nguồn tiếng Việt + URL duy nhất (tránh đụng unique(source_url))
+        $sources = [
+            ['url' => 'https://vnexpress.net', 'name' => 'VnExpress'],
+            ['url' => 'https://dantri.com.vn',  'name' => 'Dân Trí'],
+            ['url' => 'https://thanhnien.vn',   'name' => 'Thanh Niên'],
+            ['url' => 'https://tuoitre.vn',     'name' => 'Tuổi Trẻ'],
+            ['url' => 'https://genk.vn',        'name' => 'GenK'],
+            ['url' => 'https://cafebiz.vn',     'name' => 'CafeBiz'],
+            ['url' => 'https://vtv.vn',         'name' => 'VTV'],
         ];
-        $pick = $this->faker->randomElement($domains);
-
-        // Tạo URL bài viết giả lập, DUY NHẤT
-        $path = 'tin-tuc/' . $slug . '-' . Str::lower(Str::random(8)) . '.html';
-        $sourceUrl = 'https://' . $pick['host'] . '/' . $path;
+        $src = $sources[array_rand($sources)];
+        $sourceUrl = rtrim($src['url'], '/') . '/' . $slug;
 
         return [
             'title'        => $title,
             'slug'         => $slug,
-            'excerpt'      => $this->faker->text(160),
-            'content_html' => '<p>' . implode('</p><p>', $this->faker->paragraphs(5)) . '</p>',
-            'image_url'    => 'https://picsum.photos/seed/' . $this->faker->unique()->numberBetween(1, 999999) . '/800/450',
-            'source_url'   => $sourceUrl,               // ✅ luôn unique
-            'source_name'  => $pick['name'],            // ✅ tiếng Việt
-            'published_at' => now()->subDays($this->faker->numberBetween(0, 14))
-                               ->subMinutes($this->faker->numberBetween(0, 1440)),
-            'tags'         => ['tin tức', 'seed'],
+            'excerpt'      => fake()->text(140),
+            'content_html' => $html,
+            'image_url'    => 'https://picsum.photos/seed/' . fake()->numberBetween(1, 999999) . '/800/450',
+            'source_url'   => $sourceUrl,   // ✅ luôn khác nhau
+            'source_name'  => $src['name'],
+            'published_at' => fake()->dateTimeBetween('-10 days', 'now'),
+            'tags'         => json_encode(['tin tức', 'seed']),
             'status'       => 'publish',
         ];
     }
 }
-// === KẾT FILE: database/factories/NewsFactory.php ===
