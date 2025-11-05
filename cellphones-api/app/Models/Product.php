@@ -32,7 +32,7 @@ class Product extends Model
         'is_featured' => 'boolean',
     ];
 
-    protected $appends = ['final_price']; // có thể thêm 'image_absolute_url' nếu muốn xuất ra FE
+    protected $appends = ['final_price'];
 
     // ==============================
     // Quan hệ
@@ -41,9 +41,29 @@ class Product extends Model
     public function brand()        { return $this->belongsTo(Brand::class); }
     public function orderItems()   { return $this->hasMany(OrderItem::class); }
     public function reviews()      { return $this->hasMany(Review::class); }
-    public function flashSale()    { return $this->hasOne(FlashSale::class); }
-    public function images()       { return $this->hasMany(ProductImage::class)->orderBy('is_primary','desc')->orderBy('position')->orderBy('id'); }
-    public function variants()     { return $this->hasMany(ProductVariant::class)->orderByDesc('is_default')->orderBy('id'); }
+
+    // ✅ Chuẩn hóa: 1 sản phẩm có thể thuộc nhiều Flash Sale
+    public function flashSales()
+    {
+        return $this->belongsToMany(FlashSale::class, 'flash_sale_items')
+            ->withPivot(['discount_percent'])
+            ->withTimestamps();
+    }
+
+    public function images()
+    {
+        return $this->hasMany(ProductImage::class)
+            ->orderBy('is_primary', 'desc')
+            ->orderBy('position')
+            ->orderBy('id');
+    }
+
+    public function variants()
+    {
+        return $this->hasMany(ProductVariant::class)
+            ->orderByDesc('is_default')
+            ->orderBy('id');
+    }
 
     // Bundles (pivot product_bundle)
     public function bundles()
@@ -60,8 +80,8 @@ class Product extends Model
             ->withTimestamps();
     }
 
-    // Store & tồn kho
     public function inventories()  { return $this->hasMany(Inventory::class); }
+
     public function stores()
     {
         return $this->belongsToMany(Store::class, 'inventories', 'product_id', 'store_id')
@@ -69,7 +89,6 @@ class Product extends Model
             ->withTimestamps();
     }
 
-    // Gói bảo hành
     public function warrantyPlans() { return $this->hasMany(WarrantyPlan::class); }
 
     // ==============================
@@ -80,16 +99,15 @@ class Product extends Model
         return (int) ($this->sale_price ?? $this->price);
     }
 
-    // (tuỳ chọn) URL tuyệt đối nếu sau này cần
     public function getImageAbsoluteUrlAttribute(): ?string
     {
         if (!$this->image_url) return null;
-        if (Str::startsWith($this->image_url, ['http://','https://'])) return $this->image_url;
+        if (Str::startsWith($this->image_url, ['http://', 'https://'])) return $this->image_url;
         return asset($this->image_url);
     }
 
     // ==============================
-    // Hook sinh slug
+    // Hooks (sinh slug tự động)
     // ==============================
     protected static function booted()
     {

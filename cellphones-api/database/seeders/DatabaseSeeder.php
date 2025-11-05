@@ -23,6 +23,8 @@ class DatabaseSeeder extends Seeder
             WarrantyPlanSeeder::class,
             CouponSeeder::class,
             NewsSeeder::class,
+                FlashSaleSeeder::class,
+    FlashSaleItemSeeder::class,
         ]);
 
         // 🟢 Thông báo log ra terminal (dễ debug nếu có shell)

@@ -10,20 +10,29 @@ class FlashSale extends Model
     use HasFactory;
 
     protected $fillable = [
-        'product_id',
-        'discount_percent',
+        'name',
         'start_time',
         'end_time',
+        'status',
     ];
 
-    public function product()
+    protected $casts = [
+        'start_time' => 'datetime',
+        'end_time'   => 'datetime',
+    ];
+
+    // ✅ Nhiều sản phẩm trong 1 Flash Sale
+    public function products()
     {
-        return $this->belongsTo(Product::class);
+        return $this->belongsToMany(Product::class, 'flash_sale_items')
+            ->withPivot(['discount_percent'])
+            ->withTimestamps();
     }
 
+    // ✅ Kiểm tra Flash Sale đang hoạt động
     public function isActive(): bool
     {
         $now = now();
-        return $this->start_time <= $now && $this->end_time >= $now;
+        return $this->status === 'active' && $this->start_time <= $now && $this->end_time >= $now;
     }
 }
