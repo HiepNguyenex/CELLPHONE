@@ -1,5 +1,11 @@
-// === FILE: src/App.jsx ===
-import { Routes, Route, useLocation, Navigate, useParams } from "react-router-dom";
+// === FILE: src/App.jsx (ĐÃ NÂNG CẤP) ===
+import {
+  Routes,
+  Route,
+  useLocation,
+  Navigate,
+  useParams,
+} from "react-router-dom";
 
 // ==== PAGES (USER) ====
 import Home from "./pages/Home";
@@ -33,6 +39,7 @@ import NewsDetail from "./pages/NewsDetail";
 import Topbar from "./components/Topbar";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
+import ChatBubble from "./components/chat/ChatBubble"; // ✅ 1. IMPORT CHATBUBBLE
 
 // ==== ADMIN ====
 import AdminLayout from "./admin/AdminLayout";
@@ -45,6 +52,7 @@ import SettingsAdmin from "./admin/SettingsAdmin";
 import BrandsAdmin from "./admin/BrandsAdmin";
 import AdminReviews from "./admin/AdminReviews";
 import CouponsAdmin from "./admin/CouponsAdmin";
+import FlashSalesAdmin from "./admin/FlashSalesAdmin"; // ✅ 1. IMPORT FILE MỚI
 import BundlesAdmin from "./admin/BundlesAdmin";
 import StoresAdmin from "./admin/StoresAdmin";
 import InventoriesAdmin from "./admin/InventoriesAdmin";
@@ -60,7 +68,9 @@ import { CompareProvider } from "./context/CompareContext";
 import { ViewedProvider } from "./context/ViewedContext";
 
 // Redirect legacy /blog → /news
-function LegacyBlogRedirect() { return <Navigate to="/news" replace />; }
+function LegacyBlogRedirect() {
+  return <Navigate to="/news" replace />;
+}
 function LegacyBlogSlugRedirect() {
   const { slug } = useParams();
   return <Navigate to={`/news/${slug}`} replace />;
@@ -174,10 +184,16 @@ export default function App() {
                   <Route path="settings" element={<SettingsAdmin />} />
                   <Route path="reviews" element={<AdminReviews />} />
                   <Route path="coupons" element={<CouponsAdmin />} />
+                  {/* ✅ 2. BỔ SUNG ROUTE MỚI */}
+                  <Route path="flash-sales" element={<FlashSalesAdmin />} />
+                  
                   <Route path="bundles" element={<BundlesAdmin />} />
                   <Route path="stores" element={<StoresAdmin />} />
                   <Route path="inventories" element={<InventoriesAdmin />} />
-                  <Route path="warranty-plans" element={<WarrantyPlansAdmin />} />
+                  <Route
+                    path="warranty-plans"
+                    element={<WarrantyPlansAdmin />}
+                  />
                   <Route path="installments" element={<InstallmentsAdmin />} />
                 </Route>
 
@@ -186,6 +202,7 @@ export default function App() {
               </Routes>
 
               {!isAdminRoute && <Footer />}
+              <ChatBubble />
             </ViewedProvider>
           </CompareProvider>
         </WishlistProvider>
@@ -193,4 +210,3 @@ export default function App() {
     </AuthProvider>
   );
 }
-// === KẾT FILE: src/App.jsx ===

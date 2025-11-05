@@ -1,4 +1,4 @@
-// src/admin/AdminLayout.jsx
+// === FILE: src/admin/AdminLayout.jsx (ĐÃ NÂNG CẤP) ===
 import { useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
@@ -13,12 +13,13 @@ import {
   ArrowLeftOnRectangleIcon,
   TagIcon,
   ChatBubbleLeftRightIcon, // Reviews
-  TicketIcon,              // Coupons
-  GiftTopIcon,             // NEW: Bundles
-  BuildingStorefrontIcon,  // NEW: Stores
+  TicketIcon, // Coupons
+  BoltIcon, // ✅ MỚI: Flash Sale
+  GiftTopIcon, // NEW: Bundles
+  BuildingStorefrontIcon, // NEW: Stores
   ClipboardDocumentListIcon, // NEW: Inventories
-  ShieldCheckIcon,         // NEW: Warranty plans
-  CreditCardIcon,          // NEW: Installments
+  ShieldCheckIcon, // NEW: Warranty plans
+  CreditCardIcon, // NEW: Installments
 } from "@heroicons/react/24/outline";
 
 export default function AdminLayout() {
@@ -84,6 +85,12 @@ export default function AdminLayout() {
       <NavLink to="/admin/coupons" className={itemClass}>
         <TicketIcon className="h-5 w-5 text-gray-600" />
         Mã giảm giá
+      </NavLink>
+
+      {/* ✅ BỔ SUNG MỤC FLASH SALE */}
+      <NavLink to="/admin/flash-sales" className={itemClass}>
+        <BoltIcon className="h-5 w-5 text-gray-600" />
+        Flash Sale
       </NavLink>
 
       {/* ==== NEW FEATURES group ==== */}

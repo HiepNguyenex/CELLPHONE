@@ -1,21 +1,69 @@
+// === FILE: src/components/Sidebar.jsx (ĐÃ NÂNG CẤP) ===
+
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../services/api";
-import { resolveImg } from "../utils/img"; // đã có file utils/img.js trước đó
+import { resolveImg } from "../utils/img";
 
-// ... (IconPhone, IconLaptop, IconAccessory, toVNName, pickIcon giữ nguyên)
+// ... (IconPhone, IconLaptop, IconAccessory, toVNName, pickIcon giữ nguyên - nếu có) ...
 
-export default function Sidebar({ showBrands = true }) {   // 👈 thêm prop
+
+// ✅ TĂNG KÍCH THƯỚC TRONG COMPONENT CON NÀY
+function BrandRow({ brand }) {
+  const [imgOk, setImgOk] = useState(Boolean(brand.logo));
+  const letter = (brand.name || "?").slice(0, 1).toUpperCase();
+  const src = brand.logo ? resolveImg(brand.logo) : "";
+
+  return (
+    <li>
+      <Link
+        to={`/search?brand_id=${brand.id}`}
+        className="group flex items-center justify-between rounded-xl px-3 py-2 hover:bg-gray-50 transition"
+        title={`Xem sản phẩm ${brand.name}`}
+      >
+        <div className="flex items-center gap-3">
+          
+          {/* ✅ TĂNG TỪ w-8 h-8 LÊN w-10 h-10 */}
+          <div className="w-10 h-10 rounded-full bg-gray-50 ring-1 ring-gray-100 flex items-center justify-center overflow-hidden flex-shrink-0">
+            {imgOk ? (
+              <img
+                src={src}
+                alt={brand.name}
+                // ✅ TĂNG TỪ w-6 h-6 LÊN w-7 h-7
+                className="w-7 h-7 object-contain" 
+                loading="lazy"
+                onError={() => setImgOk(false)} // 👈 Khi lỗi, đổi state
+              />
+            ) : (
+              // Fallback
+              // ✅ TĂNG TỪ text-sm LÊN text-base
+              <span className="inline-flex items-center justify-center font-semibold text-gray-600 text-base">
+                {letter}
+              </span>
+            )}
+          </div>
+          {/* ✅ TĂNG TỪ text-sm LÊN text-base */}
+          <span className="font-medium text-gray-900 group-hover:text-red-600 text-base">{brand.name}</span>
+        </div>
+      </Link>
+    </li>
+  );
+}
+
+
+export default function Sidebar({ showBrands = true }) {
   const [categories, setCategories] = useState([]);
   const [brands, setBrands] = useState([]);
   const [loadingCat, setLoadingCat] = useState(true);
   const [loadingBrand, setLoadingBrand] = useState(true);
 
   useEffect(() => {
+    // ... (Logic fetch categories không đổi) ...
     api.get("/v1/categories")
       .then(res => setCategories(Array.isArray(res.data) ? res.data : (res.data?.data || [])))
       .finally(() => setLoadingCat(false));
 
+    // ... (Logic fetch brands không đổi) ...
     api.get("/v1/brands")
       .then(res => setBrands(Array.isArray(res.data) ? res.data : (res.data?.data || [])))
       .finally(() => setLoadingBrand(false));
@@ -34,39 +82,15 @@ export default function Sidebar({ showBrands = true }) {   // 👈 thêm prop
 
           {loadingBrand ? (
             <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="h-9 rounded-xl bg-gray-100 animate-pulse" />
+              // ✅ TĂNG CHIỀU CAO SKELETON
+              <div key={i} className="h-12 rounded-xl bg-gray-100 animate-pulse" />
             ))}</div>
           ) : (
             <ul className="space-y-1">
-              {brands.map((b) => {
-                const url = resolveImg(b.logo);
-                return (
-                  <li key={b.id}>
-                    <Link
-                      to={`/search?brand_id=${b.id}`}
-                      className="group flex items-center justify-between rounded-xl px-3 py-2 hover:bg-gray-50 transition"
-                      title={`Xem sản phẩm ${b.name}`}
-                    >
-                      <div className="flex items-center gap-3">
-                        {b.logo ? (
-                          <img
-                            src={url}
-                            alt={b.name}
-                            className="w-8 h-8 rounded-xl object-contain bg-gray-50 ring-1 ring-gray-100"
-                            loading="lazy"
-                            onError={(e)=>{ e.currentTarget.style.display='none'; }}
-                          />
-                        ) : (
-                          <span className="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-gray-100 text-gray-600 ring-1 ring-gray-200">
-                            {(b.name||'?')[0]}
-                          </span>
-                        )}
-                        <span className="font-medium text-gray-900 group-hover:text-red-600">{b.name}</span>
-                      </div>
-                    </Link>
-                  </li>
-                );
-              })}
+              {/* Gọi component con trong vòng lặp */}
+              {brands.map((b) => (
+                <BrandRow key={b.id} brand={b} />
+              ))}
               {brands.length === 0 && <li className="px-3 py-2 text-gray-500">Chưa có thương hiệu.</li>}
             </ul>
           )}
@@ -75,4 +99,3 @@ export default function Sidebar({ showBrands = true }) {   // 👈 thêm prop
     </aside>
   );
 }
-  

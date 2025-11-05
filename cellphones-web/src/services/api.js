@@ -6,10 +6,6 @@ const BASE_URL = (
   import.meta?.env?.VITE_API_URL || "http://127.0.0.1:8000/api"
 ).replace(/\/+$/, "");
 
-// ❌ Không cấu hình CSRF/XSRF khi dùng Bearer giữa Vercel ↔ Render
-// axios.defaults.xsrfCookieName = "XSRF-TOKEN";
-// axios.defaults.xsrfHeaderName = "X-XSRF-TOKEN";
-
 // 🔧 Helper: Chuyển object sang FormData
 function toFormData(obj = {}) {
   const fd = new FormData();
@@ -147,16 +143,15 @@ export const storeReserve = (payload = {}) =>
   api.post(`/v1/stores/reserve`, payload);
 
 // ============================ NEWS (NEW) ============================
-// ✅ THÊM: API Tin tức cho FE
 export async function getNews({ page = 1, limit = 10 } = {}, signal) {
   const res = await api.get("/v1/news", { params: { page, limit }, signal });
   return res.data; // { data: [], meta: {...} }
 }
-
 export async function getNewsDetail(slug, signal) {
   const res = await api.get(`/v1/news/${slug}`, { signal });
   return res.data; // item
 }
+
 // ============================ ADMIN API =============================
 // AUTH
 export const adminLogin = (data) => api.post("/v1/admin/login", data);
@@ -336,5 +331,24 @@ export const adminUpdateInstallment = (id, payload = {}) =>
 export const adminDeleteInstallment = (id) =>
   api.delete(`/v1/admin/installments/${id}`);
 
+// === ✅ BỔ SUNG: CHATBOT APIS ===
+// Bắt đầu một phiên chat mới
+// Trả về: { session_id: string, message?: string }
+export const startChatSession = (config = {}) =>
+  api.post("/v1/chat/start", {}, config);
+
+// Gửi tin nhắn đến bot — hỗ trợ AbortController.signal qua config
+// Trả về: { response: string }
+export const sendChatMessage = (sessionId, text, config = {}) =>
+  api.post(`/v1/chat/${encodeURIComponent(sessionId)}/message`,
+    // Gửi cả 'prompt' và 'message' để tương thích mọi phiên bản BE
+    { prompt: text, message: text },
+    config
+  );
+
+// Lấy lịch sử tin nhắn (tuỳ chọn hỗ trợ phân trang bằng cursor/page)
+export const getChatHistory = (sessionId, params = {}, signal) =>
+  api.get(`/v1/chat/${encodeURIComponent(sessionId)}`, { params, signal });
+// ==================================
+
 export default api;
-// === KẾT FILE: src/services/api.js ===
