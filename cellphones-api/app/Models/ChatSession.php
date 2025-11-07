@@ -1,27 +1,46 @@
 <?php
 
-// app/Models/ChatSession.php
-
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Prunable;
 
 class ChatSession extends Model
 {
-    use HasFactory;
+    use Prunable;
 
-    protected $fillable = ['user_id', 'session_uuid'];
+    // Dùng UUID làm khóa chính
+    protected $primaryKey = 'id';
+    public $incrementing = false;
+    protected $keyType = 'string';
 
-    // Một phiên chat có nhiều tin nhắn
+    protected $fillable = [
+        'id','user_id','status','last_activity_at','expires_at','meta'
+    ];
+
+    protected $casts = [
+        'last_activity_at' => 'datetime',
+        'expires_at'       => 'datetime',
+        'meta'             => 'array',
+    ];
+
     public function messages()
     {
-        return $this->hasMany(ChatMessage::class);
+        return $this->hasMany(ChatMessage::class, 'chat_session_id');
     }
 
-    // (Tùy chọn) Thuộc về user nào
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function isExpired(): bool
+    {
+        return $this->expires_at && now()->greaterThan($this->expires_at);
+    }
+
+    public function prunable()
+    {
+        return static::whereNotNull('expires_at')->where('expires_at', '<', now());
     }
 }

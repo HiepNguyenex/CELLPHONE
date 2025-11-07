@@ -8,7 +8,8 @@ use App\Models\OrderItem;
 use App\Models\OrderItemAddon;
 use App\Models\Product;
 use App\Models\WarrantyPlan;
-use App\Models\FlashSale;
+// use App\Models\FlashSale;                            // ⚡ SỬA: bỏ query trực tiếp FlashSale
+use App\Models\FlashSaleItem;                           // ✅ THÊM: dùng FlashSaleItem đúng thiết kế
 use App\Models\Coupon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -22,6 +23,65 @@ use App\Services\VNPay;
 
 class OrderController extends Controller
 {
+    /* ==========================================================
+     |  Helpers
+     * ==========================================================*/
+
+    /**
+     * Lấy FlashSaleItem đang active cho 1 product (nếu có).
+     * Tự dò tên cột thời gian starts_at/ends_at hoặc start_time/end_time.
+     */
+    private function getActiveFlashSaleItem(int $productId): ?FlashSaleItem  // ✅ THÊM
+    {
+        $now = now('Asia/Ho_Chi_Minh');
+
+        // Dò tên cột động trên bảng flash_sales
+        $startCol = Schema::hasColumn('flash_sales', 'starts_at') ? 'starts_at'
+                  : (Schema::hasColumn('flash_sales', 'start_time') ? 'start_time' : null);
+        $endCol   = Schema::hasColumn('flash_sales', 'ends_at')   ? 'ends_at'
+                  : (Schema::hasColumn('flash_sales', 'end_time')   ? 'end_time'   : null);
+
+        // Nếu không có cột thời gian, coi như không có flash sale nào hợp lệ
+        if (!$startCol || !$endCol) {
+            return null;
+        }
+
+        return FlashSaleItem::with('flashSale')
+            ->where('product_id', $productId)
+            ->whereHas('flashSale', function ($q) use ($now, $startCol, $endCol) {
+                // is_active nếu có thì bật filter, không có thì bỏ qua
+                if (Schema::hasColumn('flash_sales', 'is_active')) {
+                    $q->where('is_active', true);
+                }
+                $q->where($startCol, '<=', $now)
+                  ->where($endCol,   '>=', $now);
+            })
+            ->first();
+    }
+
+    /**
+     * Trả về đơn giá áp dụng flash sale (nếu có), ưu tiên sale_price,
+     * nếu không có thì dùng discount_percent; nếu không có sale thì trả về giá gốc.
+     */
+    private function priceWithFlash(?FlashSaleItem $item, int|float $originPrice): int  // ✅ THÊM
+    {
+        if (!$item) return (int) $originPrice;
+
+        if (!is_null($item->sale_price)) {
+            return (int) $item->sale_price;
+        }
+
+        if (!is_null($item->discount_percent) && $item->discount_percent > 0) {
+            return (int) round($originPrice * (1 - $item->discount_percent / 100));
+        }
+
+        return (int) $originPrice;
+    }
+
+    /* ==========================================================
+     |  API
+     * ==========================================================*/
+
     public function quote(Request $request)
     {
         $data = $request->validate([
@@ -46,16 +106,14 @@ class OrderController extends Controller
 
         foreach ($data['items'] as $r) {
             $product = $products[$r['id']];
-            $price = $product->price;
+            $origin  = (int) $product->price;
 
-            $flash = FlashSale::where('product_id', $product->id)
-                ->where('start_time', '<=', now())
-                ->where('end_time', '>=', now())
-                ->first();
-            if ($flash) $price = $price * (1 - $flash->discount_percent / 100);
+            // ⚡ SỬA: dùng FlashSaleItem + whereHas('flashSale') thay vì query FlashSale trực tiếp
+            $fsItem  = $this->getActiveFlashSaleItem($product->id);
+            $price   = $this->priceWithFlash($fsItem, $origin);
 
             $qty = (int) $r['qty'];
-            $subtotalProducts += (int)$price * $qty;
+            $subtotalProducts += (int) $price * $qty;
 
             // ✅ nhận mọi plan id active (global/brand/category/product)
             $addonIds = collect($r['addons'] ?? [])->filter()->unique();
@@ -64,7 +122,7 @@ class OrderController extends Controller
                     ->when($activeCol, fn($q) => $q->where($activeCol, true))
                     ->get(['id','price']);
 
-                $subtotalAddons += $plans->sum('price') * $qty;
+                $subtotalAddons += (int) $plans->sum('price') * $qty;
             }
         }
 
@@ -80,19 +138,19 @@ class OrderController extends Controller
             if (!$coupon || !$coupon->isValid()) {
                 return response()->json(['message' => 'Mã giảm giá không hợp lệ hoặc đã hết hạn.'], 422);
             }
-            $discount = (int)round($subtotal * ($coupon->discount / 100));
+            $discount = (int) round($subtotal * ($coupon->discount / 100));
             $couponCode = $coupon->code;
         }
 
         $total = max($subtotal + $shipping - $discount, 0);
 
         return response()->json([
-            'subtotal'      => $subtotal,
-            'shipping'      => $shipping,
-            'discount'      => $discount,
-            'total'         => $total,
+            'subtotal'      => (int) $subtotal,
+            'shipping'      => (int) $shipping,
+            'discount'      => (int) $discount,
+            'total'         => (int) $total,
             'coupon_code'   => $couponCode,
-            'addons_total'  => $subtotalAddons,
+            'addons_total'  => (int) $subtotalAddons,
         ]);
     }
 
@@ -150,15 +208,15 @@ class OrderController extends Controller
 
             foreach ($data['items'] as $row) {
                 $p   = $products[$row['id']];
-                $qty = (int)$row['qty'];
+                $qty = (int) $row['qty'];
 
-                $price = $p->price;
-                $flash = FlashSale::where('product_id', $p->id)
-                    ->where('start_time', '<=', now())
-                    ->where('end_time', '>=', now())
-                    ->first();
-                if ($flash) $price = $price * (1 - $flash->discount_percent / 100);
+                $origin = (int) $p->price;
 
+                // ⚡ SỬA: dùng FlashSaleItem đúng bảng/cột
+                $fsItem = $this->getActiveFlashSaleItem($p->id);
+                $price  = $this->priceWithFlash($fsItem, $origin);
+
+                // Trừ kho an toàn
                 $affected = Product::where('id', $p->id)
                     ->where('stock', '>=', $qty)
                     ->decrement('stock', $qty);
@@ -166,13 +224,13 @@ class OrderController extends Controller
                     throw new \Exception("Sản phẩm {$p->name} không đủ tồn kho");
                 }
 
-                $line = (int)$price * $qty;
+                $line = (int) $price * $qty;
                 $subtotalProducts += $line;
 
                 $orderItem = $order->items()->create([
                     'product_id' => $p->id,
                     'name'       => $p->name,
-                    'price'      => (int)$price,
+                    'price'      => (int) $price,
                     'qty'        => $qty,
                     'image_url'  => $p->image_url,
                 ]);
@@ -185,7 +243,7 @@ class OrderController extends Controller
                         ->get(['id','name','type','months','price']);
 
                     foreach ($plans as $plan) {
-                        $subtotalAddons += (int)$plan->price * $qty;
+                        $subtotalAddons += (int) $plan->price * $qty;
 
                         OrderItemAddon::create([
                             'order_item_id'    => $orderItem->id,
@@ -193,7 +251,7 @@ class OrderController extends Controller
                             'name'             => $plan->name,
                             'type'             => $plan->type,
                             'months'           => $plan->months,
-                            'price'            => (int)$plan->price,
+                            'price'            => (int) $plan->price,
                         ]);
                     }
                 }
@@ -212,17 +270,17 @@ class OrderController extends Controller
                 if (!$coupon || !$coupon->isValid()) {
                     return response()->json(['message' => 'Mã giảm giá không hợp lệ hoặc đã hết hạn.'], 422);
                 }
-                $discount   = (int)round($subtotal * ($coupon->discount / 100));
+                $discount   = (int) round($subtotal * ($coupon->discount / 100));
                 $couponCode = $coupon->code;
             }
 
             $total = max($subtotal + $shipping - $discount, 0);
 
             $order->update([
-                'subtotal'    => $subtotal,
-                'shipping'    => $shipping,
-                'discount'    => $discount,
-                'total'       => $total,
+                'subtotal'    => (int) $subtotal,
+                'shipping'    => (int) $shipping,
+                'discount'    => (int) $discount,
+                'total'       => (int) $total,
                 'coupon_code' => $couponCode,
             ]);
 
@@ -237,7 +295,7 @@ class OrderController extends Controller
                 $params = [
                     'vnp_Version'    => '2.1.0',
                     'vnp_TmnCode'    => config('vnpay.tmn_code'),
-                    'vnp_Amount'     => ((int)$order->total) * 100,
+                    'vnp_Amount'     => ((int) $order->total) * 100,
                     'vnp_Command'    => 'pay',
                     'vnp_CreateDate' => now()->format('YmdHis'),
                     'vnp_CurrCode'   => 'VND',

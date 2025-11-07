@@ -3,256 +3,237 @@
 namespace App\Services;
 
 use App\Models\ChatSession;
-use App\Models\Product; // DÙNG MODEL Product của bạn
-use App\Models\Store;   // DÙNG MODEL Store của bạn
+use App\Models\Product;
+use App\Models\Store;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log; // Để debug
+use Illuminate\Support\Facades\Log;
 
 class ChatbotService
 {
-    protected $apiAiUrl;
-    protected $apiAiKey;
-    protected $frontendUrl; // ✅ MỚI: Thêm URL của Frontend
+    protected ?string $apiAiUrl;
+    protected ?string $apiAiKey;
+    protected string $frontendUrl;
 
     public function __construct()
     {
-        // Đọc config 'openai' (dùng cho Groq)
-        $this->apiAiUrl = config('services.openai.url');
-        $this->apiAiKey = config('services.openai.key');
+        // Đọc cấu hình endpoint & key (Groq theo format OpenAI)
+        $this->apiAiUrl = config('services.openai.url'); // env: GROQ_API_URL
+        $this->apiAiKey = config('services.openai.key'); // env: GROQ_API_KEY
 
-        // ✅ MỚI: Đọc URL của Frontend (từ file .env)
-        // Nó sẽ đọc biến APP_FRONTEND_URL=http://127.0.0.1:5173 của bạn
-        $this->frontendUrl = rtrim(config('app.frontend_url', env('APP_FRONTEND_URL')), '/');
+        // URL FE để bot sinh link Markdown đúng dạng {FE}/product/{slug}
+        $this->frontendUrl = rtrim(config('app.frontend_url', env('APP_FRONTEND_URL', 'http://127.0.0.1:5173')), '/');
     }
 
     /**
-     * Xử lý tin nhắn (Hàm này không đổi)
+     * Xử lý tin nhắn người dùng cho một phiên chat.
+     * Lưu lịch sử (user -> bot), dựng prompt theo intent, gọi LLM, rồi trả về text bot.
      */
     public function handleUserMessage(ChatSession $session, string $userMessage): string
     {
-        // ... (Code 1-6 không đổi) ...
-        
-        // 1. Lưu tin nhắn của người dùng
-        $session->messages()->create([
-            'sender' => 'user',
-            'message' => $userMessage
-        ]);
+        $userMessage = trim($userMessage ?? '');
 
-        // 2. Phân loại ý định người dùng
+        // 1) Lưu user message (nếu có)
+        if ($userMessage !== '') {
+            $session->messages()->create([
+                'sender'  => 'user',
+                'message' => $userMessage,
+            ]);
+        }
+
+        // 2) Nhận diện intent
         $intent = $this->detectIntent($userMessage);
-
         $contextData = null;
-        
-        // 3. (Retrieval) Truy xuất data dựa trên ý định
+
+        // 3) Truy xuất dữ liệu theo intent (RAG nhẹ)
         if ($intent === 'PRODUCT_INQUIRY') {
             $contextData = $this->retrieveProductData($userMessage);
         } elseif ($intent === 'STORE_INQUIRY') {
             $contextData = $this->retrieveStoreData($userMessage);
         }
-        
-        // 4. (Augmented) Xây dựng prompt (dựa trên ý định)
-        $promptMessages = $this->buildOpenAiMessages($session, $userMessage, $contextData, $intent);
 
-        // 5. (Generation) Gọi API Groq
-        $botResponse = $this->callAiApi($promptMessages);
+        // 4) Dựng messages cho LLM
+        $messages = $this->buildOpenAiMessages($session, $userMessage, $contextData, $intent);
 
-        // 6. Lưu phản hồi của bot
+        // 5) Gọi LLM
+        $botResponse = $this->callAiApi($messages);
+
+        // 6) Lưu bot message
         $session->messages()->create([
-            'sender' => 'bot',
-            'message' => $botResponse
+            'sender'  => 'bot',
+            'message' => $botResponse,
         ]);
 
         return $botResponse;
     }
 
     /**
-     * Phân loại ý định (Hàm này không đổi)
+     * Phân loại intent rất nhẹ để gợi ý truy xuất data.
      */
-    private function detectIntent(string $userMessage): string
+    private function detectIntent(string $msg): string
     {
-        // Chuyển tin nhắn về chữ thường để so sánh
-        $lowerMessage = strtolower($userMessage);
+        $m = mb_strtolower($msg);
 
-        // Ưu tiên từ khóa về cửa hàng
-        $storeKeywords = [
-            'cửa hàng', 'địa chỉ', 'chi nhánh', 'store', 'location', 
-            'ở đâu', 'hà nội', 'hồ chí minh', 'đà nẵng'
-        ];
-        foreach ($storeKeywords as $keyword) {
-            if (str_contains($lowerMessage, $keyword)) {
+        // Ưu tiên keyword về CỬA HÀNG
+        foreach (['cửa hàng','địa chỉ','chi nhánh','store','location','ở đâu','hà nội','hồ chí minh','đà nẵng'] as $k) {
+            if (str_contains($m, $k)) {
                 return 'STORE_INQUIRY';
             }
         }
 
-        // Từ khóa về sản phẩm/thương hiệu
-        $productKeywords = [
-            'iphone', 'samsung', 'oppo', 'xiaomi', 'realme', 'vivo', 'nokia', 'asus',
-            'giá', 'bán', 'mua', 'sản phẩm', 'điện thoại', 'máy tính', 'thương hiệu',
-            'khuyến mãi', 'bảo hành', 'trả góp', 'ship', 'giao hàng'
-        ];
-        foreach ($productKeywords as $keyword) {
-            if (str_contains($lowerMessage, $keyword)) {
+        // Keyword về SẢN PHẨM/THƯƠNG HIỆU
+        foreach ([
+            'iphone','samsung','oppo','xiaomi','realme','vivo','nokia','asus',
+            'giá','bán','mua','sản phẩm','điện thoại','máy tính','khuyến mãi','trả góp','bảo hành'
+        ] as $k) {
+            if (str_contains($m, $k)) {
                 return 'PRODUCT_INQUIRY';
             }
         }
 
-        // Nếu không -> Đây là câu hỏi chung
         return 'GENERAL_KNOWLEDGE';
     }
 
-
     /**
-     * (Retrieval) Tìm sản phẩm & thương hiệu (Hàm này không đổi)
-     * (Nó đã có 'slug' nên chúng ta không cần sửa)
+     * Truy xuất 1 vài sản phẩm liên quan để LLM tham chiếu.
+     * Trả về JSON chứa name/brand/slug/price (LLM sẽ dựa vào slug để tạo link FE).
      */
-    private function retrieveProductData(string $userMessage)
+    private function retrieveProductData(string $userMessage): ?string
     {
-        $keywords = explode(' ', $userMessage);
+        $keywords = preg_split('/\s+/', $userMessage, -1, PREG_SPLIT_NO_EMPTY);
 
-        $products = Product::where(function ($query) use ($keywords) {
-            foreach ($keywords as $keyword) {
-                if (strlen($keyword) > 2) {
-                    $query->orWhere('name', 'LIKE', '%' . $keyword . '%');
+        $products = Product::where(function ($q) use ($keywords) {
+                foreach ($keywords as $kw) {
+                    if (mb_strlen($kw) > 2) {
+                        $q->orWhere('name', 'like', '%'.$kw.'%');
+                    }
                 }
-            }
-        })
-        ->with(['brand']) // Lấy kèm thương hiệu
-        ->limit(3)
-        ->get();
+            })
+            ->with('brand')
+            ->limit(3)
+            ->get();
 
         if ($products->isEmpty()) {
             return null;
         }
 
-        return $products->map(function ($product) {
+        return $products->map(function ($p) {
             return [
-                'name' => $product->name,
-                'brand' => $product->brand->name ?? 'N/A', // Data thương hiệu
-                'slug' => $product->slug, // ✅ Đây là thứ chúng ta cần
-                'price' => $product->price ?? 'Chưa có giá',
+                'name'  => $p->name,
+                'brand' => $p->brand->name ?? 'N/A',
+                'slug'  => $p->slug,
+                'price' => $p->price,
             ];
         })->toJson(JSON_UNESCAPED_UNICODE);
     }
 
     /**
-     * (Retrieval) Hàm tìm kiếm Cửa hàng (Hàm này không đổi)
+     * Truy xuất danh sách cửa hàng gần đúng theo từ khóa.
      */
-    private function retrieveStoreData(string $userMessage)
+    private function retrieveStoreData(string $userMessage): ?string
     {
-        $keywords = explode(' ', $userMessage);
-        
-        $stores = Store::where(function ($query) use ($keywords) {
-            foreach ($keywords as $keyword) {
-                if (strlen($keyword) > 2 && !in_array($keyword, ['cửa', 'hàng', 'địa', 'chỉ'])) {
-                    $query->orWhere('name', 'LIKE', '%' . $keyword . '%')
-                          ->orWhere('address', 'LIKE', '%' . $keyword . '%');
+        $keywords = preg_split('/\s+/', $userMessage, -1, PREG_SPLIT_NO_EMPTY);
+
+        $stores = Store::where(function ($q) use ($keywords) {
+                foreach ($keywords as $kw) {
+                    $kwl = mb_strtolower($kw);
+                    if (mb_strlen($kwl) > 2 && !in_array($kwl, ['cửa','hàng','địa','chỉ'])) {
+                        $q->orWhere('name', 'like', '%'.$kw.'%')
+                          ->orWhere('address', 'like', '%'.$kw.'%');
+                    }
                 }
-            }
-        })
-        ->limit(5)
-        ->get();
+            })
+            ->limit(5)
+            ->get();
 
         if ($stores->isEmpty()) {
             return null;
         }
-        
-        return $stores->map(fn($store) => [
-            'name' => $store->name,
-            'address' => $store->address,
-            'phone' => $store->phone ?? 'Chưa có SĐT'
+
+        return $stores->map(fn($s) => [
+            'name'    => $s->name,
+            'address' => $s->address,
+            'phone'   => $s->phone ?? 'Chưa có SĐT',
         ])->toJson(JSON_UNESCAPED_UNICODE);
     }
 
-
     /**
-     * ✅ NÂNG CẤP: Dạy AI cách tạo link Markdown
+     * Dựng messages theo chuẩn Chat Completions cho Groq/OpenAI.
+     * - Tiêm policy: khi có slug sản phẩm, BẮT BUỘC trả link Markdown: {FE}/product/{slug}
+     * - Kèm context (nếu có) dưới role=system để “neo” sự thật.
+     * - Lấy 4 message gần nhất để giữ ngữ cảnh.
      */
-    private function buildOpenAiMessages(ChatSession $session, string $userMessage, $contextData, string $intent)
+    private function buildOpenAiMessages(ChatSession $session, string $userMessage, ?string $contextData, string $intent): array
     {
-        $systemMessage = "";
-        $contextSection = null;
+        $system = '';
+        $context = null;
 
         if ($intent === 'PRODUCT_INQUIRY') {
-            // Lấy URL của frontend (ví dụ: http://127.0.0.1:5173)
-            $baseUrl = $this->frontendUrl;
-            
-            // ✅ NÂNG CẤP: Thêm chỉ dẫn tạo link Markdown
-            $systemMessage = "Bạn là trợ lý ảo của CELLPHONES-API. Trả lời câu hỏi về SẢN PHẨM VÀ THƯƠNG HIỆU.
-CHỈ được trả lời dựa trên thông tin được cung cấp. Không bịa đặt.
-QUAN TRỌNG: Khi bạn tìm thấy một sản phẩm, bạn PHẢI trả về nó dưới dạng link Markdown.
-Ví dụ: [Tên Sản Phẩm]($baseUrl/product/slug-san-pham)
-Hãy dùng chính xác cấu trúc link này: `$baseUrl/product/{slug}`.
-Luôn trả lời bằng Tiếng Việt.";
-            
-            $contextSection = $contextData
-                ? "Dữ liệu SẢN PHẨM (đã bao gồm 'slug'):\n" . $contextData
-                : "Không tìm thấy sản phẩm nào trong database liên quan đến câu hỏi này.";
-        
+            $base = $this->frontendUrl;
+            $system = "Bạn là trợ lý của CELLPHONES-API và CHỈ trả lời dựa trên dữ liệu cung cấp.
+QUAN TRỌNG: Khi có sản phẩm (có 'slug'), bạn PHẢI trả về link Markdown: [$base/product/{slug}].
+Ví dụ: [iPhone 15]($base/product/iphone-15). Luôn dùng tiếng Việt, ngắn gọn, rõ ràng.";
+            $context = $contextData
+                ? "DỮ LIỆU SẢN PHẨM (có 'slug'):\n".$contextData
+                : "KHÔNG CÓ sản phẩm khớp trong database.";
         } elseif ($intent === 'STORE_INQUIRY') {
-            // (Không đổi)
-            $systemMessage = "Bạn là trợ lý ảo của CELLPHONES-API. Trả lời câu hỏi về CỬA HÀNG VÀ ĐỊA CHỈ.
-CHỈ được trả lời dựa trên thông tin được cung cấp. Không bịa đặt. Luôn trả lời bằng Tiếng Việt.";
-            $contextSection = $contextData
-                ? "Dữ liệu CỬA HÀNG từ database:\n" . $contextData
-                : "Không tìm thấy cửa hàng nào trong database liên quan đến câu hỏi này.";
-        
+            $system = "Bạn là trợ lý của CELLPHONES-API. Trả lời về CỬA HÀNG/ĐỊA CHỈ dựa trên dữ liệu cung cấp. Không bịa. Dùng tiếng Việt.";
+            $context = $contextData
+                ? "DỮ LIỆU CỬA HÀNG:\n".$contextData
+                : "KHÔNG CÓ cửa hàng phù hợp trong database.";
         } else {
-            // (Không đổi)
-            $systemMessage = "Bạn là một trợ lý AI hữu ích. Hãy trả lời câu hỏi của người dùng một cách ngắn gọn, chính xác.
-Tuy nhiên, HÃY ƯU TIÊN, nếu câu hỏi có vẻ liên quan đến điện thoại (ví dụ: 'tôi nên mua điện thoại gì?'), 
-hãy gợi ý rằng bạn có thể kiểm tra sản phẩm của CELLPHONES-API nếu họ muốn.";
+            $system = "Bạn là một trợ lý AI hữu ích. Trả lời ngắn gọn, chính xác bằng tiếng Việt.
+Nếu nội dung liên quan mua điện thoại, gợi ý mình có thể kiểm tra sản phẩm tại CELLPHONES-API.";
         }
 
-        // Lấy lịch sử chat
+        // Lấy lịch sử: 4 tin gần nhất để giữ ngữ cảnh
         $history = $session->messages()->latest()->limit(4)->get()->reverse();
-        $chatHistory = [];
-        foreach ($history as $msg) {
-            $role = ($msg->sender === 'user') ? 'user' : 'assistant';
-            $chatHistory[] = ['role' => $role, 'content' => $msg->message];
+        $hist = [];
+        foreach ($history as $m) {
+            $role = $m->sender === 'user' ? 'user' : 'assistant';
+            $hist[] = ['role' => $role, 'content' => $m->message];
         }
 
-        $messages = [
-            ['role' => 'system', 'content' => $systemMessage],
-        ];
-
-        // Chỉ thêm context nếu nó tồn tại
-        if ($contextSection) {
-            $messages[] = ['role' => 'system', 'content' => $contextSection];
+        $messages = [['role' => 'system', 'content' => $system]];
+        if ($context) {
+            $messages[] = ['role' => 'system', 'content' => $context];
         }
-        
-        $messages = array_merge($messages, $chatHistory);
+        $messages = array_merge($messages, $hist);
         $messages[] = ['role' => 'user', 'content' => $userMessage];
 
         return $messages;
     }
 
     /**
-     * (Generation) Gọi API OpenAI/Groq (Hàm này không đổi)
+     * Gọi Groq (hoặc OpenAI tương thích) theo API Chat Completions.
+     * Graceful fallback khi thiếu KEY/URL.
      */
-    private function callAiApi(array $messages)
+    private function callAiApi(array $messages): string
     {
         try {
-            $response = Http::withHeaders([
-                'Authorization' => 'Bearer ' . $this->apiAiKey, // Dùng Bearer Token
-                'Content-Type' => 'application/json',
+            if (!$this->apiAiUrl || !$this->apiAiKey) {
+                // Chưa cấu hình LLM -> trả lời lịch sự để FE vẫn hoạt động
+                return 'Hiện tại mình chưa kết nối được mô hình AI. Bạn có thể hỏi về sản phẩm/cửa hàng, mình sẽ tra trong dữ liệu có sẵn nhé.';
+            }
+
+            $res = Http::withHeaders([
+                'Authorization' => 'Bearer '.$this->apiAiKey,
+                'Content-Type'  => 'application/json',
             ])->post($this->apiAiUrl, [
-                'model' => 'llama-3.1-8b-instant', // Model Groq
-                'messages' => $messages,
-                'max_tokens' => 350,
+                'model'       => 'llama-3.1-8b-instant', // Groq
+                'messages'    => $messages,
+                'max_tokens'  => 350,
                 'temperature' => 0.5,
             ]);
 
-            if ($response->successful()) {
-                return $response->json()['choices'][0]['message']['content'];
+            if ($res->successful()) {
+                return $res->json('choices.0.message.content') ?? 'Mình ở đây để hỗ trợ bạn.';
             }
 
-            // Ghi log lỗi từ Groq
-            Log::error('Chatbot Groq API Error: ' . $response->body());
-            return 'Xin lỗi, tôi đang gặp sự cố kỹ thuật (Groq API Error).';
-
-        } catch (\Exception $e) {
-            Log::error('Chatbot Service Exception: ' . $e->getMessage());
-            return 'Xin lỗi, tôi đang gặp sự cố kỹ thuật (Exception).';
+            Log::error('Chatbot Groq API Error: '.$res->body());
+            return 'Xin lỗi, mình đang gặp sự cố kỹ thuật (Groq API Error).';
+        } catch (\Throwable $e) {
+            Log::error('Chatbot Service Exception: '.$e->getMessage());
+            return 'Xin lỗi, mình đang gặp sự cố kỹ thuật (Exception).';
         }
     }
 }
