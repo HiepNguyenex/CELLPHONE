@@ -16,6 +16,12 @@ class AdminDashboardController extends Controller
     {
         // Các trạng thái tính doanh thu (tuỳ dự án bạn, sửa cho khớp)
         $paidStatuses = ['paid','processing','shipping','shipped','completed'];
+        
+        // 🚀 FIX: Lấy tên bảng chính xác để tránh lỗi Case Sensitivity trên Render
+        $orderTable = (new Order())->getTable();
+        $productTable = (new Product())->getTable();
+        $userTable = (new User())->getTable();
+
 
         $now = now();
         // 6 tháng gần nhất (bao gồm tháng hiện tại)
@@ -23,7 +29,10 @@ class AdminDashboardController extends Controller
 
         // Gom doanh thu theo tháng trực tiếp từ DB
         $from = $months->first()->copy()->startOfMonth();
-        $revenueRows = Order::selectRaw('DATE_FORMAT(created_at, "%Y-%m") as ym, SUM(total) as revenue, COUNT(*) as orders')
+        
+        // 🚀 FIX: Dùng DB::table() cho truy vấn aggregation
+        $revenueRows = DB::table($orderTable)
+            ->selectRaw('DATE_FORMAT(created_at, "%Y-%m") as ym, SUM(total) as revenue, COUNT(*) as orders')
             ->whereIn('status', $paidStatuses)
             ->where('created_at', '>=', $from)
             ->groupBy('ym')
@@ -44,15 +53,18 @@ class AdminDashboardController extends Controller
 
         // Tổng quan
         $summary = [
-            'orders'         => Order::count(),
-            'products'       => Product::count(),
-            'users'          => User::count(),
-            'today_revenue'  => (float) Order::whereIn('status', $paidStatuses)
-                                    ->whereDate('created_at', $now->toDateString())
-                                    ->sum('total'),
-            'month_revenue'  => (float) Order::whereIn('status', $paidStatuses)
-                                    ->whereBetween('created_at', [$now->copy()->startOfMonth(), $now->copy()->endOfMonth()])
-                                    ->sum('total'),
+            // 🚀 FIX: Sử dụng DB::table() thay cho Model::count()
+            'orders'         => DB::table($orderTable)->count(),
+            'products'       => DB::table($productTable)->count(),
+            'users'          => DB::table($userTable)->count(),
+            
+            'today_revenue'  => (float) DB::table($orderTable)->whereIn('status', $paidStatuses)
+                                                ->whereDate('created_at', $now->toDateString())
+                                                ->sum('total'),
+                                                
+            'month_revenue'  => (float) DB::table($orderTable)->whereIn('status', $paidStatuses)
+                                                ->whereBetween('created_at', [$now->copy()->startOfMonth(), $now->copy()->endOfMonth()])
+                                                ->sum('total'),
         ];
 
         // Đơn hàng gần đây
