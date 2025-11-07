@@ -1,11 +1,10 @@
-// src/pages/Checkout.jsx
+// === FILE: src/pages/Checkout.jsx ===
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
-import { quoteCheckout, createOrder, mapCartToItems } from "../services/api";
+import { quoteCheckout, createOrder, mapCartToItems, stripeCreate } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import useToast from "../components/Toast";
-import axios from "axios";
 
 const fVND = (n) =>
   new Intl.NumberFormat("vi-VN").format(Number(n || 0)) + " ₫";
@@ -161,28 +160,25 @@ export default function Checkout() {
       tId = toast.loading("Đang tạo đơn hàng…", { title: "Vui lòng chờ" });
 
       const { data } = await createOrder(payload);
+      const createdId = data?.order?.id ?? data?.id;
       clearCart();
 
-      // ✅ Nếu chọn Stripe
       if (form.payment_method === "stripe") {
+        // ✅ Gọi qua API chuẩn (không hard-code 127.0.0.1)
+        const res = await stripeCreate(createdId);
+        const payUrl = res?.data?.pay_url;
         toast.update(tId, {
           type: "success",
           title: "Đang chuyển đến Stripe",
           description: "Vui lòng hoàn tất thanh toán trên Stripe Checkout.",
           duration: 2000,
         });
-
-        // Gọi BE tạo session Stripe
-        const res = await axios.post(
-          "http://127.0.0.1:8000/api/v1/payment/stripe/create",
-          { order_id: data.order?.id ?? data.id }
-        );
-
-        window.location.href = res.data.pay_url;
+        if (payUrl) window.location.href = payUrl;
+        else navigate(`/order/${createdId}`); // fallback
         return;
       }
 
-      // ✅ Nếu thanh toán COD
+      // ✅ COD
       toast.update(tId, {
         type: "success",
         title: "Đặt hàng thành công",
@@ -191,9 +187,7 @@ export default function Checkout() {
           : "Cảm ơn bạn đã mua hàng.",
         duration: 4000,
       });
-
-      const id = data?.order?.id ?? data?.id;
-      navigate(id ? `/order/${id}` : "/thank-you");
+      navigate(createdId ? `/order/${createdId}` : "/thank-you");
     } catch (e) {
       console.error(e);
       const message = e?.response?.data?.message || "Đặt hàng thất bại.";

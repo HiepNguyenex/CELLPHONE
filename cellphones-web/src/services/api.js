@@ -20,10 +20,10 @@ function toFormData(obj = {}) {
 const api = axios.create({
   baseURL: BASE_URL,
   withCredentials: false,
-  timeout: 20000, // ✅ THÊM: tránh treo request quá lâu
+  timeout: 20000,
   headers: {
     Accept: "application/json",
-    "X-Requested-With": "XMLHttpRequest", // ✅ THÊM: giúp một số middleware Laravel nhận dạng XHR
+    "X-Requested-With": "XMLHttpRequest",
   },
 });
 
@@ -31,7 +31,6 @@ const api = axios.create({
 const USER_TOKEN_KEY = "token";
 const ADMIN_TOKEN_KEY = "admin_token";
 
-// ✅ THÊM: tiện ích đặt/xoá token thống nhất
 export function setAuthToken(token, isAdmin = false) {
   localStorage.setItem(isAdmin ? ADMIN_TOKEN_KEY : USER_TOKEN_KEY, token || "");
 }
@@ -44,40 +43,31 @@ export function clearAuthToken() {
 api.interceptors.request.use((config) => {
   const adminToken = localStorage.getItem(ADMIN_TOKEN_KEY);
   const userToken = localStorage.getItem(USER_TOKEN_KEY);
-  const token = adminToken || userToken;
-
-  if (token && token.trim()) {
-    config.headers.Authorization = `Bearer ${token}`;
-  } else {
-    // ✅ THÊM: nếu không có token thì xoá hẳn header để tránh gửi “Bearer ” rỗng
-    delete config.headers.Authorization;
-  }
+  const url = String(config.url || "");
+  const isAdminApi = /^\/?v1\/admin\//i.test(url);
+  const token = isAdminApi ? (adminToken || userToken) : (userToken || adminToken);
+  if (token && token.trim()) config.headers.Authorization = `Bearer ${token}`;
+  else delete config.headers.Authorization;
   return config;
 });
 
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    // ⚡ SỬA: gom logic clear token khi 401
-    const status = err?.response?.status;
-    if (status === 401) {
-      clearAuthToken();
-    }
+    if (err?.response?.status === 401) clearAuthToken();
     return Promise.reject(err);
   }
 );
 
-// ✅ Không cần Sanctum csrf-cookie nữa (để tương thích import cũ)
+// Dummy để tương thích import cũ
 async function ensureSanctum() {}
 export const getCsrfCookie = ensureSanctum;
 
 // ============================ USER AUTH ==============================
-export const login = async (data) => api.post("/v1/login", data);
-export const register = async (data) => api.post("/v1/register", data);
+export const login = (data) => api.post("/v1/login", data);
+export const register = (data) => api.post("/v1/register", data);
 export const getUser = (signal) => api.get("/v1/user", { signal });
-export const logout = async () => api.post("/v1/logout");
-
-// ✅ THÊM: Ping để kiểm tra BE sống/chết
+export const logout = () => api.post("/v1/logout");
 export const ping = (signal) => api.get("/v1/ping", { signal });
 
 // ============================ CATALOG (PUBLIC) ======================
@@ -139,13 +129,16 @@ export const removeWishlist = (productId) =>
   api.delete(`/v1/wishlist/${Number(productId)}`);
 
 // ============================ UTILITIES =============================
-// ⚡ SỬA: gửi cả addons (ID gói bảo hành) theo từng item
+// ⚡ Gửi cả id và product_id để BE nhận 1 trong 2 (compat)
 export const mapCartToItems = (cart = []) =>
   cart.map((p) => ({
     id: Number(p.id),
+    product_id: Number(p.product_id ?? p.id),
     qty: Number(p.qty ?? 1),
     addons: Array.isArray(p?.services?.warranty_options)
-      ? p.services.warranty_options.map((x) => Number(x)).filter(Number.isFinite)
+      ? p.services.warranty_options
+          .map((x) => Number(x))
+          .filter(Number.isFinite)
       : [],
   }));
 
@@ -169,14 +162,14 @@ export const storeAvailability = (params = {}, signal) =>
 export const storeReserve = (payload = {}) =>
   api.post(`/v1/stores/reserve`, payload);
 
-// ============================ NEWS (NEW) ============================
+// ============================ NEWS ============================
 export async function getNews({ page = 1, limit = 10 } = {}, signal) {
   const res = await api.get("/v1/news", { params: { page, limit }, signal });
-  return res.data; // { data: [], meta: {...} }
+  return res.data;
 }
 export async function getNewsDetail(slug, signal) {
   const res = await api.get(`/v1/news/${slug}`, { signal });
-  return res.data; // item
+  return res.data;
 }
 
 // ============================ ADMIN API =============================
@@ -196,13 +189,19 @@ export const adminCreateProduct = (payload = {}) =>
   api.post("/v1/admin/products", toFormData(payload));
 export const adminUpdateProduct = (id, payload = {}) =>
   api.post(`/v1/admin/products/${id}`, toFormData(payload));
-export const adminDeleteProduct = (id) => api.delete(`/v1/admin/products/${id}`);
-export const adminGetProduct = (id) => api.get(`/v1/admin/products/${id}`);
+export const adminDeleteProduct = (id) =>
+  api.delete(`/v1/admin/products/${id}`);
+export const adminGetProduct = (id) =>
+  api.get(`/v1/admin/products/${id}`);
 
 // PRODUCT IMAGES
 export const adminGetProductImages = (productId) =>
   api.get(`/v1/admin/products/${productId}/images`);
-export const adminUploadProductImage = (productId, fileOrUrl, isPrimary = false) => {
+export const adminUploadProductImage = (
+  productId,
+  fileOrUrl,
+  isPrimary = false
+) => {
   const fd = new FormData();
   if (fileOrUrl instanceof File) fd.append("image", fileOrUrl);
   else fd.append("url", String(fileOrUrl));
@@ -222,7 +221,9 @@ export const adminGetProductVariants = (productId, params = {}) =>
 export const adminCreateProductVariant = (productId, payload = {}) =>
   api.post(`/v1/admin/products/${productId}/variants`, payload);
 export const adminBulkUpsertProductVariants = (productId, variants = []) =>
-  api.post(`/v1/admin/products/${productId}/variants/bulk-upsert`, { variants });
+  api.post(`/v1/admin/products/${productId}/variants/bulk-upsert`, {
+    variants,
+  });
 export const adminGetProductVariant = (variantId) =>
   api.get(`/v1/admin/product-variants/${variantId}`);
 export const adminUpdateProductVariant = (variantId, payload = {}) =>
@@ -254,7 +255,8 @@ export const adminDeleteBrand = (id) =>
 export const adminGetOrders = (params = {}) =>
   api.get("/v1/admin/orders", { params });
 export const adminGetOrder = (id) => api.get(`/v1/admin/orders/${id}`);
-export const adminDeleteOrder = (id) => api.delete(`/v1/admin/orders/${id}`);
+export const adminDeleteOrder = (id) =>
+  api.delete(`/v1/admin/orders/${id}`);
 export const adminUpdateOrderStatus = (id, status, note) =>
   api.post(`/v1/admin/orders/${id}/status`, { status, note });
 export const adminDownloadInvoice = (id) =>
@@ -281,7 +283,7 @@ export const adminSaveSettings = (settings = {}) => {
   return api.post("/v1/admin/settings", fd);
 };
 
-// FLASH SALES
+// FLASH SALES (ADMIN)
 export const adminGetFlashSales = (params = {}) =>
   api.get("/v1/admin/flash-sales", { params });
 export const adminCreateFlashSale = (payload = {}) =>
@@ -291,18 +293,19 @@ export const adminUpdateFlashSale = (id, payload = {}) =>
 export const adminDeleteFlashSale = (id) =>
   api.delete(`/v1/admin/flash-sales/${id}`);
 
-// REVIEWS
+// REVIEWS (ADMIN)
 export const adminGetReviews = (params = {}) =>
   api.get("/v1/admin/reviews", { params });
 export const adminUpdateReviewStatus = (id, status) =>
   api.post(`/v1/admin/reviews/${id}/status`, { status });
-export const adminDeleteReview = (id) => api.delete(`/v1/admin/reviews/${id}`);
+export const adminDeleteReview = (id) =>
+  api.delete(`/v1/admin/reviews/${id}`);
 export const adminBulkReviewStatus = (ids = [], status) =>
   api.post("/v1/admin/reviews/bulk/status", { ids, status });
 export const adminBulkReviewDelete = (ids = []) =>
   api.post("/v1/admin/reviews/bulk/delete", { ids });
 
-// COUPONS
+// COUPONS (ADMIN)
 export const adminGetCoupons = (params = {}) =>
   api.get("/v1/admin/coupons", { params });
 export const adminCreateCoupon = (payload = {}) =>
@@ -313,7 +316,7 @@ export const adminUpdateCoupon = (id, payload = {}) =>
 export const adminDeleteCoupon = (id) =>
   api.delete(`/v1/admin/coupons/${id}`);
 
-// BUNDLES
+// BUNDLES (ADMIN)
 export const adminGetBundles = (productId) =>
   api.get(`/v1/admin/products/${productId}/bundles`);
 export const adminUpsertBundles = (productId, items = []) =>
@@ -321,7 +324,7 @@ export const adminUpsertBundles = (productId, items = []) =>
 export const adminDetachBundle = (productId, bundleProductId) =>
   api.delete(`/v1/admin/products/${productId}/bundles/${bundleProductId}`);
 
-// STORES
+// STORES (ADMIN)
 export const adminGetStores = (params = {}) =>
   api.get(`/v1/admin/stores`, { params });
 export const adminCreateStore = (payload = {}) =>
@@ -331,7 +334,7 @@ export const adminUpdateStore = (id, payload = {}) =>
 export const adminDeleteStore = (id) =>
   api.delete(`/v1/admin/stores/${id}`);
 
-// INVENTORIES
+// INVENTORIES (ADMIN)
 export const adminGetInventories = (params = {}) =>
   api.get(`/v1/admin/inventories`, { params });
 export const adminUpsertInventories = (items = []) =>
@@ -339,7 +342,7 @@ export const adminUpsertInventories = (items = []) =>
 export const adminDeleteInventory = (id) =>
   api.delete(`/v1/admin/inventories/${id}`);
 
-// WARRANTY PLANS
+// WARRANTY PLANS (ADMIN)
 export const adminGetWarrantyPlans = (params = {}) =>
   api.get(`/v1/admin/warranties`, { params });
 export const adminCreateWarrantyPlan = (payload = {}) =>
@@ -349,7 +352,7 @@ export const adminUpdateWarrantyPlan = (id, payload = {}) =>
 export const adminDeleteWarrantyPlan = (id) =>
   api.delete(`/v1/admin/warranties/${id}`);
 
-// INSTALLMENTS
+// INSTALLMENTS (ADMIN)
 export const adminGetInstallments = (params = {}) =>
   api.get(`/v1/admin/installments`, { params });
 export const adminCreateInstallment = (payload = {}) =>
@@ -359,24 +362,16 @@ export const adminUpdateInstallment = (id, payload = {}) =>
 export const adminDeleteInstallment = (id) =>
   api.delete(`/v1/admin/installments/${id}`);
 
-// === ✅ BỔ SUNG: CHATBOT APIS ===
-// Bắt đầu một phiên chat mới
-// Trả về: { session_id: string, message?: string }
+// === ✅ CHATBOT APIS ===
 export const startChatSession = (config = {}) =>
   api.post("/v1/chat/start", {}, config);
-
-// Gửi tin nhắn đến bot — hỗ trợ AbortController.signal qua config
-// Trả về: { response: string }
 export const sendChatMessage = (sessionId, text, config = {}) =>
   api.post(
     `/v1/chat/${encodeURIComponent(sessionId)}/message`,
-    { prompt: text, message: text }, // gửi cả 'prompt' và 'message' để tương thích mọi phiên bản BE
+    { prompt: text, message: text },
     config
   );
-
-// Lấy lịch sử tin nhắn (tuỳ chọn hỗ trợ phân trang bằng cursor/page)
 export const getChatHistory = (sessionId, params = {}, signal) =>
   api.get(`/v1/chat/${encodeURIComponent(sessionId)}`, { params, signal });
-// ==================================
 
 export default api;

@@ -21,6 +21,9 @@ export default function ReviewList({
       setLoading(true);
       await deleteReview(id);
       onRefresh && onRefresh();
+    } catch (e) {
+      const msg = e?.response?.data?.message || "Xóa đánh giá thất bại.";
+      alert(msg);
     } finally {
       setLoading(false);
     }
@@ -28,18 +31,28 @@ export default function ReviewList({
 
   const handleSave = async (id) => {
     if (!editRating) return alert("Chọn số sao!");
+    if (!editContent.trim()) return alert("Vui lòng nhập nội dung.");
+
     setLoading(true);
-    await updateReview(id, { rating: editRating, content: editContent });
-    setEditingId(null);
-    setLoading(false);
-    onRefresh && onRefresh();
+    try {
+      await updateReview(id, {
+        rating: Number(editRating),
+        content: editContent.trim(),
+      });
+      setEditingId(null);
+      onRefresh && onRefresh();
+    } catch (e) {
+      const msg =
+        e?.response?.data?.message || "Cập nhật đánh giá thất bại.";
+      alert(msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // ⚡ Nếu không có review nào
+  // Không có review
   if (!reviews || reviews.length === 0) {
-    return (
-      <p className="text-gray-500 text-sm mt-4">Chưa có đánh giá nào.</p>
-    );
+    return <p className="text-gray-500 text-sm mt-4">Chưa có đánh giá nào.</p>;
   }
 
   return (
@@ -63,12 +76,11 @@ export default function ReviewList({
 
                   {r.status === "pending" && (
                     <span className="text-xs text-orange-500 font-medium">
-                      (Chờ duyệt)
+                     
                     </span>
                   )}
                 </p>
 
-                {/* ⏰ Nếu chưa có created_at (review mới thêm tạm) thì dùng "Vừa xong" */}
                 <span className="text-xs text-gray-400">
                   {r.created_at
                     ? new Date(r.created_at).toLocaleString("vi-VN")
@@ -82,7 +94,7 @@ export default function ReviewList({
                     onClick={() => {
                       setEditingId(r.id);
                       setEditContent(r.content || "");
-                      setEditRating(r.rating);
+                      setEditRating(r.rating || 5);
                     }}
                     className="text-blue-600 hover:underline"
                   >
@@ -122,19 +134,23 @@ export default function ReviewList({
                   <button
                     onClick={() => handleSave(r.id)}
                     className="bg-red-600 text-white px-3 py-1 rounded text-sm"
+                    disabled={loading}
                   >
                     Lưu
                   </button>
                   <button
                     onClick={() => setEditingId(null)}
                     className="text-gray-500 text-sm"
+                    disabled={loading}
                   >
                     Hủy
                   </button>
                 </div>
               </div>
             ) : (
-              <p className="mt-2 text-gray-700">{r.content}</p>
+              <p className="mt-2 text-gray-700 whitespace-pre-line">
+                {r.content}
+              </p>
             )}
           </div>
         );

@@ -1,26 +1,51 @@
-// src/components/product/ReviewForm.jsx
 import { useState } from "react";
 import RatingStars from "../RatingStars";
 import { useAuth } from "../../context/AuthContext";
+
+const MIN_LEN = 5; // tối thiểu 5 ký tự
 
 export default function ReviewForm({ onSubmit, submitting = false }) {
   const { user } = useAuth();
   const [rating, setRating] = useState(5);
   const [content, setContent] = useState("");
+  const [err, setErr] = useState("");
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setErr("");
+
     if (!user) {
-      alert("Vui lòng đăng nhập để đánh giá sản phẩm."); // ✅ kiểm tra đăng nhập
+      alert("Vui lòng đăng nhập để đánh giá sản phẩm.");
       return;
     }
-    if (!rating) return alert("Vui lòng chọn số sao.");
-    onSubmit?.({ rating, content }); // ✅ gọi hàm từ ProductDetail.jsx
-    setRating(5);
-    setContent("");
+
+    if (!rating || Number(rating) < 1) {
+      setErr("Vui lòng chọn số sao.");
+      return;
+    }
+
+    const text = content.trim();
+    if (text.length < MIN_LEN) {
+      setErr(`Nội dung quá ngắn (≥ ${MIN_LEN} ký tự).`);
+      return;
+    }
+
+    try {
+      // onSubmit có thể trả Promise từ ProductDetail.jsx
+      await onSubmit?.({ rating: Number(rating), content: text });
+      // reset khi gửi thành công
+      setRating(5);
+      setContent("");
+    } catch (e2) {
+      const msg =
+        e2?.response?.data?.message ||
+        e2?.message ||
+        "Gửi đánh giá thất bại. Thử lại sau.";
+      setErr(msg);
+    }
   };
 
-  // ✅ Nếu chưa login -> hiển thị gợi ý thay vì form
+  // Chưa đăng nhập → nhắc đăng nhập
   if (!user)
     return (
       <div className="mt-8 border-t pt-6 text-center">
@@ -35,6 +60,7 @@ export default function ReviewForm({ onSubmit, submitting = false }) {
   return (
     <div className="mt-8 border-t pt-6">
       <h3 className="text-lg font-semibold mb-3">Viết đánh giá của bạn</h3>
+
       <form onSubmit={handleSubmit} className="space-y-3">
         {/* Rating */}
         <div>
@@ -59,6 +85,16 @@ export default function ReviewForm({ onSubmit, submitting = false }) {
             placeholder="Chia sẻ cảm nhận của bạn về sản phẩm..."
             className="w-full border rounded p-2 text-sm focus:ring-red-500 focus:border-red-500"
           />
+          <div className="mt-1 flex items-center justify-between text-xs text-gray-500">
+            <span>Tối thiểu {MIN_LEN} ký tự</span>
+            <span>{content.trim().length} ký tự</span>
+          </div>
+
+          {err && (
+            <div className="mt-2 text-sm text-red-600">
+              {err}
+            </div>
+          )}
         </div>
 
         {/* Submit */}
