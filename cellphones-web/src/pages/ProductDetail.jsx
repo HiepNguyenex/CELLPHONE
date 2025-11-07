@@ -40,7 +40,7 @@ const resolveImg = (u) => {
 };
 
 export default function ProductDetail() {
-  const { id } = useParams();
+  const { id: idOrSlug } = useParams(); // ⚡ có thể là id hoặc slug
   const navigate = useNavigate();
   const { addToCart } = useCart();
   const { user } = useAuth();
@@ -72,53 +72,66 @@ export default function ProductDetail() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // =============== LOAD DATA ===============
+  // =============== LOAD DATA (theo thứ tự) ===============
   useEffect(() => {
     const ac = new AbortController();
     setLoading(true);
 
-    Promise.all([
-      getProductDetail(id, ac.signal),
-      getRelatedProducts(id, ac.signal),
-      getReviews(id, {}, ac.signal),
-    ])
-      .then(([p, rel, r]) => {
-        const data = p?.data || null;
-
+    (async () => {
+      try {
+        // 1) Lấy product theo idOrSlug
+        const p = await getProductDetail(idOrSlug, ac.signal);
+        const data = p?.data || p || null;
         setProduct(data);
-        setRelated(Array.isArray(rel?.data) ? rel.data : []);
 
-        const d = r?.data;
-        setReviews(d?.data || []);
-        setAvg(d?.stats?.avg_rating || 0);
-        setCount(d?.stats?.count || 0);
-        setBreakdown(d?.stats?.breakdown || {});
-        setHasMore(d?.meta?.has_more || false);
+        if (data) {
+          // ✅ chuẩn hoá URL: nếu param không trùng id → replace sang /product/:id
+          if (String(idOrSlug) !== String(data.id)) {
+            navigate(`/product/${data.id}`, { replace: true });
+          }
 
-        if (data) addViewed(data);
+          addViewed(data);
+          if (data?.selected_variant?.attrs) {
+            setSelectedAttrs(data.selected_variant.attrs);
+            setSelectedVariant(data.selected_variant);
+          } else {
+            setSelectedAttrs({});
+            setSelectedVariant(null);
+          }
+          if (data?.name) document.title = `${data.name} | Cellphones Clone`;
 
-        if (data?.selected_variant?.attrs) {
-          setSelectedAttrs(data.selected_variant.attrs);
-          setSelectedVariant(data.selected_variant);
-        } else {
-          setSelectedAttrs({});
-          setSelectedVariant(null);
+          // 2) Dùng id thật để gọi related & reviews (tránh lỗi nếu param là slug)
+          const [rel, r] = await Promise.all([
+            getRelatedProducts(data.id, ac.signal),
+            getReviews(data.id, {}, ac.signal),
+          ]);
+
+          setRelated(Array.isArray(rel?.data) ? rel.data : []);
+
+          const d = r?.data;
+          setReviews(d?.data || []);
+          setAvg(d?.stats?.avg_rating || 0);
+          setCount(d?.stats?.count || 0);
+          setBreakdown(d?.stats?.breakdown || {});
+          setHasMore(d?.meta?.has_more || false);
         }
-
-        if (data?.name) document.title = `${data.name} | Cellphones Clone`;
-      })
-      .catch((err) => {
-        if (err?.name !== "CanceledError") console.error("Lỗi khi tải sản phẩm:", err);
-      })
-      .finally(() => !ac.signal.aborted && setLoading(false));
+      } catch (err) {
+        if (err?.name !== "CanceledError") {
+          console.error("Lỗi khi tải sản phẩm:", err);
+        }
+      } finally {
+        !ac.signal.aborted && setLoading(false);
+      }
+    })();
 
     return () => ac.abort();
-  }, [id, addViewed]);
+  }, [idOrSlug, addViewed, navigate]);
 
-  // =============== REVIEWS ===============
+  // =============== REVIEWS (luôn dùng product.id thật) ===============
   const fetchReviews = (pageNum = 1, ratingFilter = null) => {
+    if (!product?.id) return;
     const ac = new AbortController();
-    getReviews(id, { page: pageNum, rating: ratingFilter }, ac.signal)
+    getReviews(product.id, { page: pageNum, rating: ratingFilter }, ac.signal)
       .then((r) => {
         const d = r.data;
         if (pageNum === 1) setReviews(d?.data || []);
@@ -135,14 +148,16 @@ export default function ProductDetail() {
   };
 
   useEffect(() => {
+    if (!product?.id) return;
     fetchReviews(1, reviewFilter);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, reviewFilter]);
+  }, [product?.id, reviewFilter]);
 
   const handleSubmitReview = (payload) => {
     if (!user) return alert("Bạn cần đăng nhập để đánh giá.");
+    if (!product?.id) return;
     setSubmitting(true);
-    addReview(id, payload)
+    addReview(product.id, payload)
       .then(() => {
         setSubmitting(false);
         fetchReviews(1, reviewFilter);

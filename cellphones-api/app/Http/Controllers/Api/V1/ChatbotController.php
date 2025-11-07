@@ -7,6 +7,7 @@ use App\Models\ChatSession;
 use App\Services\ChatbotService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use App\Models\Product; // ✅ THÊM: để map slug → id
 
 class ChatbotController extends Controller
 {
@@ -72,6 +73,9 @@ class ChatbotController extends Controller
         $userMessage = $request->input('message');
         $botResponse = $this->chatbotService->handleUserMessage($session, $userMessage);
 
+        // ✅ CHUẨN HÓA LINK /product/<slug> → /product/<id>
+        $botResponse = $this->canonicalizeProductLinks($botResponse);
+
         // Cập nhật hoạt động
         $session->update(['last_activity_at' => now()]);
 
@@ -89,6 +93,37 @@ class ChatbotController extends Controller
             ->orderBy('created_at', 'asc')
             ->get(['sender','message','created_at']);
 
+        // ✅ CHUẨN HÓA LINK trong lịch sử (nếu muốn)
+        $messages->transform(function ($m) {
+            $m->message = $this->canonicalizeProductLinks($m->message);
+            return $m;
+        });
+
         return response()->json(['history' => $messages]);
     }
+
+    /**
+     * ✅ Thay mọi đoạn "/product/<slug>" (kể cả trong URL đầy đủ) thành "/product/<id>" nếu tìm được id.
+     * Không động vào các case đã là số.
+     */
+   // ChatbotController.php  (thay nguyên hàm)
+private function canonicalizeProductLinks(string $text): string
+{
+    // Bắt cả URL đầy đủ lẫn path /product/<token>
+    return preg_replace_callback('~(?:https?://[^/\s]+)?(/product/)([A-Za-z0-9\-_]+)~u', function ($m) {
+        $token = $m[2];
+
+        // Đã là id số? giữ nguyên id
+        if (ctype_digit($token)) {
+            $id = $token;
+        } else {
+            // Thử tìm theo slug
+            $id = \App\Models\Product::where('slug', $token)->value('id');
+            if (!$id) return $m[1] . $token; // không tìm thấy thì giữ nguyên token
+        }
+
+        // ✅ Trả link TƯƠNG ĐỐI để FE tự dùng domain hiện tại
+        return '/product/' . $id;
+    }, $text);
+}
 }

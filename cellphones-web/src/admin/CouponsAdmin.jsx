@@ -11,7 +11,9 @@ const toInputDateTimeLocal = (d) => {
   if (!d) return "";
   const dt = new Date(d);
   const pad = (n) => String(n).padStart(2, "0");
-  return `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(
+    dt.getHours()
+  )}:${pad(dt.getMinutes())}`;
 };
 
 export default function CouponsAdmin() {
@@ -29,7 +31,7 @@ export default function CouponsAdmin() {
     max_uses: "",
     starts_at: "",
     expires_at: "",
-    is_active: true,
+    is_active: true, // Frontend state
   });
 
   const openCreate = () => {
@@ -53,7 +55,8 @@ export default function CouponsAdmin() {
       max_uses: row.max_uses || "",
       starts_at: row.starts_at ? toInputDateTimeLocal(row.starts_at) : "",
       expires_at: row.expires_at ? toInputDateTimeLocal(row.expires_at) : "",
-      is_active: !!row.is_active,
+      // ✅ FIX 2: Đồng bộ hóa khi EDIT. Kiểm tra 'status' từ Backend hoặc 'is_active' cũ
+      is_active: row.status === 'active' || !!row.is_active,
     });
     setModalOpen(true);
   };
@@ -99,7 +102,9 @@ export default function CouponsAdmin() {
         max_uses: form.max_uses ? Number(form.max_uses) : null,
         starts_at: form.starts_at || null,
         expires_at: form.expires_at || null,
-        is_active: !!form.is_active,
+        // 🚀 FIX 1 (QUAN TRỌNG): Chuyển đổi is_active (boolean) thành status (string)
+        // để thỏa mãn validation 'status' required của Laravel (lỗi 422).
+        status: form.is_active ? 'active' : 'inactive', 
       };
 
       if (editing) {
@@ -153,7 +158,7 @@ export default function CouponsAdmin() {
             onChange={(e) => setFilters((f) => ({ ...f, per_page: Number(e.target.value), page: 1 }))}
             className="border rounded-xl px-3 py-2"
           >
-            {[10,20,50,100].map(n => <option key={n} value={n}>{n}/trang</option>)}
+            {[10, 20, 50, 100].map(n => <option key={n} value={n}>{n}/trang</option>)}
           </select>
           <div className="flex items-center gap-2">
             <button onClick={() => setFilters((f) => ({ ...f, page: 1 }))} className="px-4 py-2 rounded-xl bg-gray-900 text-white">
@@ -199,12 +204,18 @@ export default function CouponsAdmin() {
                   <td className="p-3 whitespace-nowrap">{fmt(r.starts_at)}</td>
                   <td className="p-3 whitespace-nowrap">{fmt(r.expires_at)}</td>
                   <td className="p-3">
-                    <span className={
-                      "text-xs px-2 py-0.5 rounded-full border " +
-                      (r.is_active ? "bg-green-50 text-green-700 border-green-200" : "bg-gray-100 text-gray-600 border-gray-200")
-                    }>
-                      {r.is_active ? "Đang bật" : "Đang tắt"}
-                    </span>
+                    {/* ✅ FIX 3: Sử dụng status từ Backend để hiển thị */}
+                    {(() => {
+                      const isActive = r.status === 'active' || !!r.is_active; // Hỗ trợ cả hai trường
+                      return (
+                        <span className={
+                          "text-xs px-2 py-0.5 rounded-full border " +
+                          (isActive ? "bg-green-50 text-green-700 border-green-200" : "bg-gray-100 text-gray-600 border-gray-200")
+                        }>
+                          {isActive ? "Đang bật" : "Đang tắt"}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className="p-3 whitespace-nowrap">{fmt(r.updated_at)}</td>
                   <td className="p-3 text-right">

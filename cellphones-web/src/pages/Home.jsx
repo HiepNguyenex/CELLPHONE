@@ -1,3 +1,5 @@
+// === FILE: src/pages/Home.jsx (CĂN CHỈNH CHIỀU CAO SIDEBAR VÀ FLASH SALE) ===
+
 import { useEffect, useMemo, useState } from "react";
 import Sidebar from "../components/Sidebar";
 import BannerCarousel from "../components/BannerCarousel";
@@ -80,13 +82,23 @@ export default function Home() {
 
   return (
     <div className="mx-auto max-w-[1280px] px-4 md:px-6 py-4">
-      {/* ===== Hero: Sidebar + Banner ===== */}
+      {/* ===== Hero: Sidebar + Banner (KHỐI CHÍNH) ===== */}
+      {/* Khối Grid này sẽ căn chỉnh chiều cao hai cột */}
       <div className="grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)] gap-4 items-start">
-        <aside className="hidden lg:block rounded-2xl bg-white ring-1 ring-gray-100 shadow-sm overflow-hidden">
+        
+        {/* COLUMN 1: Sidebar / Thương hiệu */}
+        {/* 🚀 FIX: Thêm pb-[270px] (Giá trị ước tính padding dưới) để Sidebar kéo dài ra. */}
+        {/* Giá trị này cần được điều chỉnh chính xác bằng chiều cao Banner Flash Sale + padding */}
+        <aside className="hidden lg:block rounded-2xl bg-white ring-1 ring-gray-100 shadow-sm overflow-hidden pb-[270px]"> 
           <Sidebar />
         </aside>
+        
+        {/* COLUMN 2: Banner và Flash Sale */}
         <div className="rounded-2xl bg-white ring-1 ring-gray-100 shadow-sm overflow-hidden">
           <BannerCarousel />
+          
+          {/* FlashSaleSection nằm ngay dưới Banner Carousel */}
+          <FlashSaleSection /> 
         </div>
       </div>
 
@@ -114,13 +126,6 @@ export default function Home() {
           <BrandCarousel title="Thương hiệu nổi bật" limit={18} />
         </div>
       </div>
-
-      {/* ===== Flash Sale ===== */}
-      <section className="mt-6">
-        <div className="rounded-2xl overflow-hidden ring-1 ring-gray-100 shadow-sm bg-white">
-          <FlashSaleSection />
-        </div>
-      </section>
 
       {error && (
         <div className="mt-6 rounded-2xl bg-red-50 text-red-700 ring-1 ring-red-200 p-4">

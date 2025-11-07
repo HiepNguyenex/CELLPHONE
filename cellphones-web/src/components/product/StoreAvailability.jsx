@@ -1,112 +1,85 @@
-// src/components/product/StoreAvailability.jsx
-import { useEffect, useMemo, useState } from "react";
-import { storeAvailability, storeReserve } from "../../services/api";
+// File: src/components/product/StoreAvailability.jsx (Mã giả định đã sửa)
+
+import React, { useState, useMemo } from 'react';
+import StoreIframeMap from './StoreIframeMap'; // 🚀 Nhúng component Iframe Map
+
+// 💡 DỮ LIỆU GIẢ ĐỊNH (Sẽ được thay thế bằng dữ liệu thực từ API)
+const MOCK_STORES = [
+    { 
+        id: 1, 
+        name: "CPS TPHCM (Quận 10)", 
+        stock: 5, 
+        lat: 10.7712, 
+        lng: 106.6901,
+        address: "123 Sư Vạn Hạnh, Q.10"
+    },
+    { 
+        id: 2, 
+        name: "CPS Hà Nội (Hoàn Kiếm)", 
+        stock: 3, 
+        lat: 21.0285, 
+        lng: 105.8542,
+        address: "456 Hàng Bài, Q.Hoàn Kiếm"
+    },
+    { 
+        id: 3, 
+        name: "CPS Đà Nẵng (Hải Châu)", 
+        stock: 8, 
+        lat: 16.0544, 
+        lng: 108.2022,
+        address: "789 Điện Biên Phủ, Q.Hải Châu"
+    },
+];
 
 export default function StoreAvailability({ productId }) {
-  const [city, setCity] = useState("DN"); // mặc định Đà Nẵng giống ảnh bạn
-  const [rows, setRows] = useState([]);
-  const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
+    // State lưu trữ id của cửa hàng đang được chọn (mặc định là cửa hàng đầu tiên)
+    const [selectedStoreId, setSelectedStoreId] = useState(MOCK_STORES[0]?.id);
 
-  const load = async (pid = productId, c = city) => {
-    if (!pid) return;
-    setLoading(true);
-    try {
-      const res = await storeAvailability({ product_id: pid, city: c });
-      const list = res?.data?.stores ?? res?.data?.data ?? res?.data ?? [];
-      setRows(Array.isArray(list) ? list : []);
-    } catch (e) {
-      console.error(e);
-      setRows([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+    // Tính toán cửa hàng được chọn
+    const selectedStore = useMemo(() => {
+        return MOCK_STORES.find(store => store.id === selectedStoreId);
+    }, [selectedStoreId]);
 
-  useEffect(() => {
-    if (open) load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, city, productId]);
+    // Lấy tọa độ
+    const storeLocation = selectedStore ? { lat: selectedStore.lat, lng: selectedStore.lng } : null;
 
-  const inStockCount = useMemo(() => rows.filter(r => r.stock > 0).length, [rows]);
-
-  return (
-    <>
-      <div className="mt-6 rounded border p-4">
-        <div className="flex items-center justify-between">
-          <div className="font-medium">Tình trạng hàng & giao nhanh</div>
-          <div className="text-sm text-green-600">
-            {inStockCount > 0 ? `✔ Còn hàng tại ${inStockCount} cửa hàng` : "Hết hàng tại khu vực"}
-          </div>
-        </div>
-
-        <div className="mt-3 flex gap-2">
-          <select
-            className="border rounded px-3 py-2"
-            value={city}
-            onChange={(e) => setCity(e.target.value)}
-          >
-            <option value="HCM">Hồ Chí Minh</option>
-            <option value="HN">Hà Nội</option>
-            <option value="DN">Đà Nẵng</option>
-          </select>
-
-          <button
-            onClick={() => setOpen(true)}
-            className="px-4 py-2 rounded bg-gray-700 text-white"
-          >
-            Xem cửa hàng còn hàng
-          </button>
-        </div>
-      </div>
-
-      {/* Modal */}
-      {open && (
-        <div
-          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
-          onClick={() => setOpen(false)}
-        >
-          <div
-            className="bg-white w-full max-w-3xl rounded-lg p-4 grid grid-cols-1 md:grid-cols-2 gap-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div>
-              <div className="font-semibold mb-2">Cửa hàng ({city})</div>
-              <div className="border rounded max-h-[360px] overflow-auto">
-                {loading ? (
-                  <div className="p-3 text-sm text-gray-600">Đang tải…</div>
-                ) : rows.length ? (
-                  rows.map((s) => (
-                    <div key={s.id} className="p-3 border-b last:border-b-0">
-                      <div className="font-medium">{s.name}</div>
-                      <div className="text-sm text-gray-600">
-                        Tồn kho: <b>{s.stock}</b>
-                        {s.fast_2h ? " • Giao nhanh 2h" : ""}
-                        <div className="truncate">{s.address || "—"}</div>
-                      </div>
+    return (
+        <div className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 md:p-6 space-y-4">
+            <h3 className="font-semibold text-lg">Kho hàng còn tại:</h3>
+            
+            {/* Danh sách cửa hàng (Click để chọn vị trí trên bản đồ) */}
+            <div className="space-y-2 text-sm max-h-56 overflow-y-auto pr-2">
+                {MOCK_STORES.map(store => (
+                    <div 
+                        key={store.id} 
+                        // Thêm hiệu ứng chọn
+                        className={`flex justify-between items-center p-2 rounded-lg cursor-pointer transition 
+                                  ${store.id === selectedStoreId ? 'bg-red-50 ring-2 ring-red-400' : 'hover:bg-gray-50'}`}
+                        onClick={() => setSelectedStoreId(store.id)}
+                    >
+                        <div className="flex flex-col">
+                            <div className="font-medium text-gray-800">{store.name}</div>
+                            <div className="text-gray-600 text-xs">{store.address}</div>
+                        </div>
+                        <div className={`font-semibold text-right ${store.stock > 0 ? 'text-emerald-600' : 'text-gray-500'}`}>
+                            {store.stock > 0 ? `Còn (${store.stock})` : 'Hết'}
+                        </div>
                     </div>
-                  ))
-                ) : (
-                  <div className="p-3 text-sm text-gray-600">Không có cửa hàng.</div>
-                )}
-              </div>
+                ))}
             </div>
 
-            <div className="text-sm text-gray-500 flex items-center justify-center">
-              (Bạn có thể thêm bản đồ ở đây)
+            {/* BẢN ĐỒ INLINE (Sử dụng Iframe Map) */}
+            <div className="pt-4 border-t border-gray-100">
+                <h4 className="font-semibold text-base mb-3 text-center text-gray-800">
+                    {selectedStore ? `📍 Xem vị trí: ${selectedStore.name}` : 'Chọn cửa hàng để xem vị trí'}
+                </h4>
+                <div className="rounded-lg overflow-hidden shadow-md">
+                    <StoreIframeMap 
+                        storeLocation={storeLocation} 
+                        storeName={selectedStore?.name} 
+                    />
+                </div>
             </div>
-
-            <div className="col-span-full flex justify-end gap-2">
-              <button
-                className="px-4 py-2 rounded bg-gray-200"
-                onClick={() => setOpen(false)}
-              >
-                Đóng
-              </button>
-            </div>
-          </div>
         </div>
-      )}
-    </>
-  );
+    );
 }

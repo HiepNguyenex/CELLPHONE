@@ -14,21 +14,18 @@ class ReviewController extends Controller
 {
     /**
      * GET /api/v1/products/{productId}/reviews
-     * ✅ Hiển thị review đã duyệt + review của chính user đang đăng nhập (kể cả pending)
-     * - Hỗ trợ ?rating=1..5
-     * - Hỗ trợ ?per_page=5 (giới hạn 3..20)
      */
     public function index($productId, Request $r)
     {
         $product = Product::findOrFail($productId);
 
-        // ⚡ QUAN TRỌNG: Lấy user từ Sanctum nếu có Bearer token, dù route này không gắn middleware
+        // Lấy user ID từ Sanctum (API token) hoặc Auth (session)
         $userId = optional($r->user('sanctum'))->id ?? Auth::id();
 
         $query = Review::with('user:id,name')
             ->where('product_id', $product->id)
             ->when($userId, function ($q) use ($userId) {
-                // Nếu có user: hiển thị cả review của họ (kể cả pending)
+                // Nếu có user: hiển thị cả review đã duyệt + review của chính họ (kể cả pending/rejected)
                 $q->where(function ($sub) use ($userId) {
                     $sub->where('status', Review::STATUS_APPROVED)
                         ->orWhere('user_id', $userId);
@@ -77,7 +74,7 @@ class ReviewController extends Controller
 
     /**
      * POST /api/v1/products/{productId}/reviews
-     * ✅ Chỉ người đã mua mới được review (1 user / 1 product)
+     * 🚀 FIX: Cho phép cập nhật và TỰ ĐỘNG DUYỆT nếu đã mua hàng.
      */
     public function store(Request $request, $productId = null)
     {
@@ -99,17 +96,8 @@ class ReviewController extends Controller
 
         $productId = $productId ?? ($validated['product_id'] ?? null);
         $product   = Product::findOrFail($productId);
-
-        // Tránh trùng review
-        $exists = Review::where('product_id', $product->id)
-            ->where('user_id', $userId)
-            ->exists();
-
-        if ($exists) {
-            return response()->json(['message' => 'Bạn đã đánh giá sản phẩm này rồi.'], 422);
-        }
-
-        // Kiểm tra đã mua hàng chưa
+        
+        // 1. Kiểm tra đã mua hàng chưa (Business Logic)
         $hasPurchased = OrderItem::where('product_id', $product->id)
             ->whereHas('order', fn($q) => $q->where('user_id', $userId))
             ->exists();
@@ -119,15 +107,35 @@ class ReviewController extends Controller
                 'message' => 'Bạn chỉ có thể đánh giá sản phẩm sau khi đã mua hàng.'
             ], 403);
         }
+        
+        // 2. Xác định trạng thái mới (TỰ ĐỘNG DUYỆT nếu đã mua)
+        $newStatus = Review::STATUS_APPROVED;
+        
+        // 3. Tìm đánh giá hiện tại để tránh trùng lặp
+        $existingReview = Review::where('product_id', $product->id)
+            ->where('user_id', $userId)
+            ->first(); 
 
-        // Tạo review mới (pending)
+        if ($existingReview) {
+            // 🚀 FIX 422: Cập nhật đánh giá cũ thay vì báo lỗi
+            $existingReview->update(array_merge($validated, [
+                'status' => $newStatus, 
+            ]));
+            
+            return response()->json([
+                'message' => 'Đã cập nhật đánh giá cũ thành công.',
+                'data'    => $existingReview->load('user:id,name'),
+            ], 200); 
+        }
+
+        // 4. Tạo review mới (TỰ ĐỘNG DUYỆT)
         $review = Review::create([
             'user_id'           => $userId,
             'product_id'        => $product->id,
             'rating'            => $validated['rating'],
             'content'           => $validated['content'] ?? null,
             'verified_purchase' => true,
-            'status'            => Review::STATUS_PENDING,
+            'status'            => $newStatus, // 🚀 TỰ ĐỘNG DUYỆT
         ]);
 
         $review->load('user:id,name');
@@ -155,6 +163,7 @@ class ReviewController extends Controller
             'content' => ['nullable', 'string', 'max:2000'],
         ]);
 
+        // Giữ nguyên logic đưa về pending khi người dùng tự chỉnh sửa
         $review->update(array_merge($validated, [
             'status' => Review::STATUS_PENDING,
         ]));

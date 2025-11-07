@@ -1,4 +1,4 @@
-// === FILE: src/admin/FlashSalesAdmin.jsx (ĐÃ SỬA LỖI 422) ===
+// === FILE: src/admin/FlashSalesAdmin.jsx (ĐÃ BỔ SUNG TRƯỜNG ADMIN) ===
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -6,18 +6,18 @@ import {
   adminCreateFlashSale,
   adminUpdateFlashSale,
   adminDeleteFlashSale,
-} from "../services/api"; // 👈 API của bạn đã có sẵn
+} from "../services/api";
 import { BoltIcon, PlusIcon, PencilIcon, TrashIcon } from "@heroicons/react/24/outline";
 
 // (Đây là một Modal/Form component đơn giản, bạn có thể tách ra file riêng nếu muốn)
 function SaleFormModal({ sale, onClose, onSave }) {
-  // ✅ MỚI: Helper: Chuyển ISO (YYYY-MM-DDTHH:mm) sang YYYY-MM-DD HH:MM:SS
+  // ✅ Helper: Chuyển ISO (YYYY-MM-DDTHH:mm) sang YYYY-MM-DD HH:MM:SS
   const formatForLaravel = (datetimeLocal) => {
     if (!datetimeLocal) return null;
     return datetimeLocal.replace("T", " ") + ":00";
   };
   
-  // ✅ MỚI: Helper: Chuyển ISO (từ DB) sang YYYY-MM-DDTHH:mm (cho input)
+  // ✅ Helper: Chuyển ISO (từ DB) sang YYYY-MM-DDTHH:mm (cho input)
   const formatForInput = (iso) => {
     if (!iso) return "";
     try {
@@ -36,17 +36,23 @@ function SaleFormModal({ sale, onClose, onSave }) {
     start_time: "",
     end_time: "",
     is_active: true,
+    // 🚀 BỔ SUNG: Hai trường mới
+    description: "", 
+    banner_image_url: "", 
   });
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (sale) {
-      // ✅ SỬA: Dùng helper để định dạng ngày giờ
+      // ✅ CẬP NHẬT: Load dữ liệu từ sale object, bao gồm các trường mới
       setData({
         name: sale.name || "",
         start_time: formatForInput(sale.start_time),
         end_time: formatForInput(sale.end_time),
         is_active: sale.is_active ?? true,
+        // 🚀 BỔ SUNG: Load dữ liệu cho các trường mới
+        description: sale.description || "",
+        banner_image_url: sale.banner_image_url || "",
       });
     }
   }, [sale]);
@@ -68,6 +74,9 @@ function SaleFormModal({ sale, onClose, onSave }) {
         ...data,
         start_time: formatForLaravel(data.start_time),
         end_time: formatForLaravel(data.end_time),
+        // 🚀 ĐẢM BẢO GỬI URL và DESCRIPTION TỚI BACKEND
+        description: data.description.trim(),
+        banner_image_url: data.banner_image_url.trim() || null, // Cho phép NULL nếu trống
       };
       
       if (sale?.id) {
@@ -103,6 +112,8 @@ function SaleFormModal({ sale, onClose, onSave }) {
           </h3>
         </div>
         <div className="p-4 space-y-3">
+          
+          {/* Trường Tên sự kiện */}
           <div>
             <label className="block text-sm font-medium text-gray-700">Tên sự kiện</label>
             <input
@@ -115,6 +126,34 @@ function SaleFormModal({ sale, onClose, onSave }) {
               required
             />
           </div>
+
+          {/* 🚀 BỔ SUNG: Trường URL Ảnh Banner */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700">URL Ảnh Banner (Trang chủ)</label>
+            <input 
+                type="url" 
+                name="banner_image_url"
+                placeholder="Dán link ảnh banner (https://...)" 
+                value={data.banner_image_url} 
+                onChange={handleChange}
+                className="mt-1 block w-full border border-gray-300 rounded-md p-2"
+            />
+          </div>
+
+          {/* 🚀 BỔ SUNG: Trường Mô tả */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Mô tả chương trình</label>
+            <textarea
+                rows="2"
+                name="description"
+                placeholder="Mô tả ngắn gọn về chương trình (Hiển thị trên Banner)"
+                value={data.description} 
+                onChange={handleChange}
+                className="mt-1 block w-full border border-gray-300 rounded-md p-2"
+            />
+          </div>
+          
+          {/* Trường Thời gian bắt đầu */}
           <div>
             <label className="block text-sm font-medium text-gray-700">Thời gian bắt đầu</label>
             <input
@@ -126,6 +165,7 @@ function SaleFormModal({ sale, onClose, onSave }) {
               required
             />
           </div>
+          {/* Trường Thời gian kết thúc */}
           <div>
             <label className="block text-sm font-medium text-gray-700">Thời gian kết thúc</label>
             <input
@@ -137,6 +177,7 @@ function SaleFormModal({ sale, onClose, onSave }) {
               required
             />
           </div>
+          
           <div className="flex items-center gap-2">
             <input
               type="checkbox"
@@ -149,6 +190,7 @@ function SaleFormModal({ sale, onClose, onSave }) {
             <label htmlFor="is_active" className="text-sm text-gray-700">Kích hoạt ngay</label>
           </div>
         </div>
+        
         <div className="p-4 border-t bg-gray-50 flex justify-end gap-3">
           <button
             type="button"
@@ -183,6 +225,7 @@ export default function FlashSalesAdmin() {
   const fetchData = async () => {
     setLoading(true);
     try {
+      // ✅ CẦN LƯU Ý: Admin API getFlashSales thường trả về nhiều sale, không chỉ 1
       const res = await adminGetFlashSales();
       setSales(res.data?.data || res.data || []);
     } catch (err) {
@@ -217,7 +260,7 @@ export default function FlashSalesAdmin() {
         await adminDeleteFlashSale(id);
         fetchData(); // Tải lại
       } catch (err) {
-         alert("Lỗi: " + err.response?.data?.message || err.message);
+          alert("Lỗi: " + err.response?.data?.message || err.message);
       }
     }
   }
@@ -263,7 +306,7 @@ export default function FlashSalesAdmin() {
                       <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 text-xs">Tắt</span>
                     )}
                   </td>
-                  <td className="p-3 text-sm">
+                  <td className="p-3 text-sm flex items-center gap-1">
                     <button
                       onClick={() => handleOpenModal(sale)}
                       className="p-1.5 text-blue-600 hover:bg-gray-100 rounded"

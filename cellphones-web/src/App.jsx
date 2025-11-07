@@ -1,4 +1,4 @@
-// === FILE: src/App.jsx (ĐÃ NÂNG CẤP) ===
+// === FILE: src/App.jsx (FINAL FIX - LỖI IMPORT CONTEXT) ===
 import {
   Routes,
   Route,
@@ -35,11 +35,14 @@ import PaymentResult from "./pages/PaymentResult";
 import NewsList from "./pages/NewsList";
 import NewsDetail from "./pages/NewsDetail";
 
+// 🚀 BỔ SUNG: Trang Flash Sale mới
+import FlashSalePage from "./pages/FlashSalePage";
+
 // ==== COMPONENTS ====
 import Topbar from "./components/Topbar";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
-import ChatBubble from "./components/chat/ChatBubble"; // ✅ 1. IMPORT CHATBUBBLE
+import ChatBubble from "./components/chat/ChatBubble";
 
 // ==== ADMIN ====
 import AdminLayout from "./admin/AdminLayout";
@@ -52,7 +55,8 @@ import SettingsAdmin from "./admin/SettingsAdmin";
 import BrandsAdmin from "./admin/BrandsAdmin";
 import AdminReviews from "./admin/AdminReviews";
 import CouponsAdmin from "./admin/CouponsAdmin";
-import FlashSalesAdmin from "./admin/FlashSalesAdmin"; // ✅ 1. IMPORT FILE MỚI
+import FlashSalesAdmin from "./admin/FlashSalesAdmin"; 
+import FlashSaleProductsAdmin from "./admin/FlashSaleProductsAdmin"; 
 import BundlesAdmin from "./admin/BundlesAdmin";
 import StoresAdmin from "./admin/StoresAdmin";
 import InventoriesAdmin from "./admin/InventoriesAdmin";
@@ -64,7 +68,8 @@ import AuthProvider from "./context/AuthContext";
 import RequireAuth from "./components/RequireAuth";
 import { WishlistProvider } from "./context/WishlistContext";
 import { ToastProvider } from "./components/Toast";
-import { CompareProvider } from "./context/CompareContext";
+// 🚀 FIX LỖI IMPORT: Sửa từ "./context/CompareProvider" thành "./context/CompareContext"
+import { CompareProvider } from "./context/CompareContext"; 
 import { ViewedProvider } from "./context/ViewedContext";
 
 // Redirect legacy /blog → /news
@@ -84,7 +89,8 @@ export default function App() {
     <AuthProvider>
       <ToastProvider>
         <WishlistProvider>
-          <CompareProvider>
+          {/* 🚀 ĐÃ SỬA: CompareProvider hiện đã được tìm thấy */}
+          <CompareProvider> 
             <ViewedProvider>
               {!isAdminRoute && (
                 <>
@@ -106,6 +112,8 @@ export default function App() {
                 <Route path="/checkout" element={<Checkout />} />
                 <Route path="/thankyou" element={<ThankYou />} />
                 <Route path="/payment/result" element={<PaymentResult />} />
+
+                <Route path="/flash-sale" element={<FlashSalePage />} />
 
                 {/* ✅ NEWS */}
                 <Route path="/news" element={<NewsList />} />
@@ -184,8 +192,11 @@ export default function App() {
                   <Route path="settings" element={<SettingsAdmin />} />
                   <Route path="reviews" element={<AdminReviews />} />
                   <Route path="coupons" element={<CouponsAdmin />} />
-                  {/* ✅ 2. BỔ SUNG ROUTE MỚI */}
-                  <Route path="flash-sales" element={<FlashSalesAdmin />} />
+                  
+                  {/* ROUTE CHÍNH CỦA FLASH SALE */}
+                  <Route path="flash-sales" element={<FlashSalesAdmin />} /> 
+                  {/* ROUTE QUẢN LÝ SẢN PHẨM CỦA FLASH SALE */}
+                  <Route path="flash-sales/:id/products" element={<FlashSaleProductsAdmin />} />
                   
                   <Route path="bundles" element={<BundlesAdmin />} />
                   <Route path="stores" element={<StoresAdmin />} />

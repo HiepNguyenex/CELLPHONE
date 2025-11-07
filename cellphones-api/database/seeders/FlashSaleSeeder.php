@@ -1,4 +1,5 @@
 <?php
+// File: database/seeders/FlashSaleSeeder.php
 
 namespace Database\Seeders;
 
@@ -14,9 +15,11 @@ class FlashSaleSeeder extends Seeder
             ['name' => 'Black Friday 2025'],
             [
                 'description' => 'Siêu khuyến mãi Black Friday - giảm giá sốc toàn bộ sản phẩm HOT!',
-                'start_time' => now()->subDay(), // bắt đầu hôm qua
-                'end_time'   => now()->addDays(3), // kết thúc sau 3 ngày
-                'is_active'  => true,
+                'banner_image_url' => 'images/banners/black_friday_2025_banner.jpg', 
+                'start_time' => now()->subDay(), 
+                'end_time'   => now()->addDays(3), 
+                // 🚀 ĐÃ SỬA: Thay 'status' bằng 'is_active' (boolean)
+                'is_active' => true, 
             ]
         );
     }

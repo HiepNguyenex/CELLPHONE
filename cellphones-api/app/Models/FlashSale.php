@@ -13,26 +13,23 @@ class FlashSale extends Model
         'name',
         'start_time',
         'end_time',
-        'status',
+        'is_active', // Cột trạng thái đã được thống nhất
+        'banner_image_url', 
+        'description',
     ];
 
     protected $casts = [
         'start_time' => 'datetime',
         'end_time'   => 'datetime',
+        'is_active'  => 'boolean',
     ];
 
-    // ✅ Nhiều sản phẩm trong 1 Flash Sale
+  // ✅ Nhiều sản phẩm trong 1 Flash Sale
     public function products()
     {
         return $this->belongsToMany(Product::class, 'flash_sale_items')
-            ->withPivot(['discount_percent'])
+            // 🚀 FIX LỖI: Bổ sung 'id' của bảng pivot vào withPivot
+            ->withPivot(['id', 'sale_price', 'discount_percent', 'is_featured']) 
             ->withTimestamps();
-    }
-
-    // ✅ Kiểm tra Flash Sale đang hoạt động
-    public function isActive(): bool
-    {
-        $now = now();
-        return $this->status === 'active' && $this->start_time <= $now && $this->end_time >= $now;
     }
 }

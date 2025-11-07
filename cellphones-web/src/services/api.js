@@ -47,16 +47,14 @@ api.interceptors.request.use((config) => {
   const url = String(config.url || "");
   const method = String(config.method || "get").toUpperCase();
 
-  // ✅ Chỉ thêm X-Requested-With cho phương thức KHÔNG PHẢI GET
   if (method !== "GET") {
     config.headers["X-Requested-With"] = "XMLHttpRequest";
   } else {
     delete config.headers["X-Requested-With"];
   }
 
-  // ✅ Chỉ gắn Bearer khi cần (để GET public không kích hoạt preflight)
   const isAdminApi = /^\/?v1\/admin\//i.test(url);
-  const isUserGet  = /^\/?v1\/(user|orders|wishlist)\b/i.test(url); // các GET cần auth
+  const isUserGet  = /^\/?v1\/(user|orders|wishlist)\b/i.test(url);
   const needsAuth  = method !== "GET" || isAdminApi || isUserGet;
 
   const token = isAdminApi ? (adminToken || userToken) : (userToken || adminToken);
@@ -77,7 +75,6 @@ api.interceptors.response.use(
   }
 );
 
-// Dummy để tương thích import cũ
 async function ensureSanctum() {}
 export const getCsrfCookie = ensureSanctum;
 
@@ -147,7 +144,6 @@ export const removeWishlist = (productId) =>
   api.delete(`/v1/wishlist/${Number(productId)}`);
 
 // ============================ UTILITIES =============================
-// ⚡ Gửi cả id và product_id để BE nhận 1 trong 2 (compat)
 export const mapCartToItems = (cart = []) =>
   cart.map((p) => ({
     id: Number(p.id),
@@ -162,6 +158,17 @@ export const mapCartToItems = (cart = []) =>
 export const getActiveFlashSales = (signal) =>
   api.get("/v1/flash-sales/active", { signal });
 export const getFlashSales = getActiveFlashSales;
+
+export async function getCurrentFlashSaleForHome(signal) {
+  try {
+    const res = await api.get("/v1/flash-sales/active", { signal });
+    return res.data;
+  } catch (error) {
+    if (error.name === "CanceledError") return;
+    console.error("Error fetching current flash sale products:", error);
+    return null;
+  }
+}
 
 // ============================ PUBLIC BOXES ==========================
 export const getWarrantyPlans = (params = {}, signal) =>
@@ -301,6 +308,14 @@ export const adminUpdateFlashSale = (id, payload = {}) =>
   api.post(`/v1/admin/flash-sales/${id}`, payload);
 export const adminDeleteFlashSale = (id) =>
   api.delete(`/v1/admin/flash-sales/${id}`);
+
+// 🚀 BỔ SUNG: ADMIN FLASH SALES PRODUCTS APIs
+export const adminGetFlashSaleProductsAdmin = (saleId, params = {}) => 
+    api.get(`/v1/admin/flash-sales/${saleId}/products-management`, { params });
+
+export const adminUpsertFlashSaleProduct = (saleId, payload) =>
+    api.post(`/v1/admin/flash-sales/${saleId}/products-management`, payload);
+// END FLASH SALES ADMIN
 
 // REVIEWS (ADMIN)
 export const adminGetReviews = (params = {}) =>

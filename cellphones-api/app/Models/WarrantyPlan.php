@@ -18,14 +18,15 @@ class WarrantyPlan extends Model
         'name',
         'type',
         'months',
-        'price',      // integer VND
-        'is_active',  // ✅ dùng đúng cột trong migration
+        'price',
+        'active',   // 🚀 ĐÃ SỬA: Khớp với tên cột 'active' trong migration
+        'slug',     // 🚀 ĐÃ THÊM: Fix lỗi 500 (Mass Assignment) cho trường slug
     ];
 
     protected $casts = [
         'months'    => 'integer',
         'price'     => 'integer',
-        'is_active' => 'boolean',
+        'active' => 'boolean', // 🚀 ĐÃ SỬA: Khớp với tên cột 'active'
     ];
 
     // Quan hệ cơ bản (tuỳ dự án có/không)

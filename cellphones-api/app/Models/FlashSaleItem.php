@@ -17,6 +17,11 @@ class FlashSaleItem extends Model
         'sale_price',
         'discount_percent',
         'is_active',
+        'is_featured', // 🚀 BỔ SUNG: Cột Nổi bật
+    ];
+
+    protected $casts = [
+        'is_featured' => 'boolean', // 🚀 BỔ SUNG: Cast cho Nổi bật
     ];
 
     // =========================
