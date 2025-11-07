@@ -21,18 +21,20 @@ class ReviewController extends Controller
     public function index($productId, Request $r)
     {
         $product = Product::findOrFail($productId);
-        $userId = Auth::id();
+
+        // ⚡ QUAN TRỌNG: Lấy user từ Sanctum nếu có Bearer token, dù route này không gắn middleware
+        $userId = optional($r->user('sanctum'))->id ?? Auth::id();
 
         $query = Review::with('user:id,name')
             ->where('product_id', $product->id)
             ->when($userId, function ($q) use ($userId) {
-                // ✅ Nếu user đăng nhập: hiển thị cả review của họ (kể cả pending)
+                // Nếu có user: hiển thị cả review của họ (kể cả pending)
                 $q->where(function ($sub) use ($userId) {
                     $sub->where('status', Review::STATUS_APPROVED)
                         ->orWhere('user_id', $userId);
                 });
             }, function ($q) {
-                // ✅ Nếu khách chưa đăng nhập: chỉ xem review đã duyệt
+                // Khách: chỉ xem review đã duyệt
                 $q->where('status', Review::STATUS_APPROVED);
             })
             ->orderByDesc('created_at');
@@ -41,13 +43,13 @@ class ReviewController extends Controller
             $query->where('rating', (int) $r->rating);
         }
 
-        // ✅ Cho phép per_page linh hoạt
+        // per_page linh hoạt (3..20)
         $perPage = (int) $r->get('per_page', 5);
         $perPage = max(3, min($perPage, 20));
 
         $reviews = $query->paginate($perPage);
 
-        // ✅ Thống kê tổng thể (chỉ review đã duyệt)
+        // Thống kê chỉ tính review đã duyệt
         $approvedQuery = Review::where('product_id', $product->id)
             ->where('status', Review::STATUS_APPROVED);
 
@@ -75,7 +77,7 @@ class ReviewController extends Controller
 
     /**
      * POST /api/v1/products/{productId}/reviews
-     * ✅ Chỉ người đã mua mới được review
+     * ✅ Chỉ người đã mua mới được review (1 user / 1 product)
      */
     public function store(Request $request, $productId = null)
     {
@@ -96,9 +98,9 @@ class ReviewController extends Controller
         $validated = $request->validate($rules);
 
         $productId = $productId ?? ($validated['product_id'] ?? null);
-        $product = Product::findOrFail($productId);
+        $product   = Product::findOrFail($productId);
 
-        // ✅ Kiểm tra trùng review
+        // Tránh trùng review
         $exists = Review::where('product_id', $product->id)
             ->where('user_id', $userId)
             ->exists();
@@ -107,7 +109,7 @@ class ReviewController extends Controller
             return response()->json(['message' => 'Bạn đã đánh giá sản phẩm này rồi.'], 422);
         }
 
-        // ✅ Kiểm tra đã mua hàng chưa
+        // Kiểm tra đã mua hàng chưa
         $hasPurchased = OrderItem::where('product_id', $product->id)
             ->whereHas('order', fn($q) => $q->where('user_id', $userId))
             ->exists();
@@ -118,7 +120,7 @@ class ReviewController extends Controller
             ], 403);
         }
 
-        // ✅ Tạo review mới (pending)
+        // Tạo review mới (pending)
         $review = Review::create([
             'user_id'           => $userId,
             'product_id'        => $product->id,
@@ -128,7 +130,6 @@ class ReviewController extends Controller
             'status'            => Review::STATUS_PENDING,
         ]);
 
-        // ✅ Trả về dữ liệu review vừa tạo (để FE hiển thị ngay)
         $review->load('user:id,name');
 
         return response()->json([
@@ -139,7 +140,7 @@ class ReviewController extends Controller
 
     /**
      * PUT /api/v1/reviews/{id}
-     * ✅ Người dùng sửa review của chính mình
+     * ✅ Người dùng sửa review của chính mình → đưa về pending
      */
     public function update($id, Request $r)
     {
@@ -154,7 +155,6 @@ class ReviewController extends Controller
             'content' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        // ✅ Khi sửa, đưa lại trạng thái "pending"
         $review->update(array_merge($validated, [
             'status' => Review::STATUS_PENDING,
         ]));

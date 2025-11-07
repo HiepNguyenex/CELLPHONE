@@ -8,8 +8,7 @@ use App\Models\OrderItem;
 use App\Models\OrderItemAddon;
 use App\Models\Product;
 use App\Models\WarrantyPlan;
-// use App\Models\FlashSale;                            // ⚡ SỬA: bỏ query trực tiếp FlashSale
-use App\Models\FlashSaleItem;                           // ✅ THÊM: dùng FlashSaleItem đúng thiết kế
+use App\Models\FlashSaleItem;
 use App\Models\Coupon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -27,29 +26,20 @@ class OrderController extends Controller
      |  Helpers
      * ==========================================================*/
 
-    /**
-     * Lấy FlashSaleItem đang active cho 1 product (nếu có).
-     * Tự dò tên cột thời gian starts_at/ends_at hoặc start_time/end_time.
-     */
-    private function getActiveFlashSaleItem(int $productId): ?FlashSaleItem  // ✅ THÊM
+    private function getActiveFlashSaleItem(int $productId): ?FlashSaleItem
     {
         $now = now('Asia/Ho_Chi_Minh');
 
-        // Dò tên cột động trên bảng flash_sales
         $startCol = Schema::hasColumn('flash_sales', 'starts_at') ? 'starts_at'
                   : (Schema::hasColumn('flash_sales', 'start_time') ? 'start_time' : null);
         $endCol   = Schema::hasColumn('flash_sales', 'ends_at')   ? 'ends_at'
                   : (Schema::hasColumn('flash_sales', 'end_time')   ? 'end_time'   : null);
 
-        // Nếu không có cột thời gian, coi như không có flash sale nào hợp lệ
-        if (!$startCol || !$endCol) {
-            return null;
-        }
+        if (!$startCol || !$endCol) return null;
 
         return FlashSaleItem::with('flashSale')
             ->where('product_id', $productId)
             ->whereHas('flashSale', function ($q) use ($now, $startCol, $endCol) {
-                // is_active nếu có thì bật filter, không có thì bỏ qua
                 if (Schema::hasColumn('flash_sales', 'is_active')) {
                     $q->where('is_active', true);
                 }
@@ -59,69 +49,59 @@ class OrderController extends Controller
             ->first();
     }
 
-    /**
-     * Trả về đơn giá áp dụng flash sale (nếu có), ưu tiên sale_price,
-     * nếu không có thì dùng discount_percent; nếu không có sale thì trả về giá gốc.
-     */
-    private function priceWithFlash(?FlashSaleItem $item, int|float $originPrice): int  // ✅ THÊM
+    private function priceWithFlash(?FlashSaleItem $item, int|float $originPrice): int
     {
         if (!$item) return (int) $originPrice;
-
-        if (!is_null($item->sale_price)) {
-            return (int) $item->sale_price;
-        }
-
+        if (!is_null($item->sale_price)) return (int) $item->sale_price;
         if (!is_null($item->discount_percent) && $item->discount_percent > 0) {
             return (int) round($originPrice * (1 - $item->discount_percent / 100));
         }
-
         return (int) $originPrice;
     }
 
     /* ==========================================================
-     |  API
+     |  QUOTE
      * ==========================================================*/
-
     public function quote(Request $request)
     {
         $data = $request->validate([
             'items' => ['required', 'array', 'min:1'],
-            'items.*.id'       => ['required', 'integer', 'exists:products,id'],
-            'items.*.qty'      => ['required', 'integer', 'min:1', 'max:99'],
-            'items.*.addons'   => ['nullable', 'array'],
-            'items.*.addons.*' => ['integer', 'min:1'],
-            'shipping_method'  => ['nullable', Rule::in(['standard', 'express'])],
-            'coupon'           => ['nullable', 'string', 'max:50'],
+            // ✅ chấp nhận id hoặc product_id
+            'items.*.product_id' => ['required_without:items.*.id','integer','exists:products,id'],
+            'items.*.id'         => ['required_without:items.*.product_id','integer','exists:products,id'],
+            'items.*.qty'        => ['required', 'integer', 'min:1', 'max:99'],
+            'items.*.addons'     => ['nullable', 'array'],
+            'items.*.addons.*'   => ['integer', 'min:1'],
+            'shipping_method'    => ['nullable', Rule::in(['standard', 'express'])],
+            'coupon'             => ['nullable', 'string', 'max:50'],
         ]);
 
-        $ids = collect($data['items'])->pluck('id')->unique();
+        // Lấy toàn bộ product ids từ cả 2 field
+        $ids = collect($data['items'])->map(fn($r) => $r['product_id'] ?? $r['id'])->unique();
         $products = Product::whereIn('id', $ids)->get(['id', 'price'])->keyBy('id');
 
         $subtotalProducts = 0;
         $subtotalAddons   = 0;
 
-        // ✅ cột active động
         $activeCol = Schema::hasColumn('warranty_plans', 'is_active') ? 'is_active'
                    : (Schema::hasColumn('warranty_plans', 'active') ? 'active' : null);
 
         foreach ($data['items'] as $r) {
-            $product = $products[$r['id']];
+            $pid     = (int) ($r['product_id'] ?? $r['id']);
+            $product = $products[$pid];
             $origin  = (int) $product->price;
 
-            // ⚡ SỬA: dùng FlashSaleItem + whereHas('flashSale') thay vì query FlashSale trực tiếp
-            $fsItem  = $this->getActiveFlashSaleItem($product->id);
+            $fsItem  = $this->getActiveFlashSaleItem($pid);
             $price   = $this->priceWithFlash($fsItem, $origin);
 
             $qty = (int) $r['qty'];
             $subtotalProducts += (int) $price * $qty;
 
-            // ✅ nhận mọi plan id active (global/brand/category/product)
             $addonIds = collect($r['addons'] ?? [])->filter()->unique();
             if ($addonIds->isNotEmpty()) {
                 $plans = WarrantyPlan::whereIn('id', $addonIds)
                     ->when($activeCol, fn($q) => $q->where($activeCol, true))
                     ->get(['id','price']);
-
                 $subtotalAddons += (int) $plans->sum('price') * $qty;
             }
         }
@@ -154,14 +134,18 @@ class OrderController extends Controller
         ]);
     }
 
+    /* ==========================================================
+     |  STORE
+     * ==========================================================*/
     public function store(Request $request)
     {
         $data = $request->validate([
             'items' => ['required', 'array', 'min:1'],
-            'items.*.id'       => ['required', 'integer', 'exists:products,id'],
-            'items.*.qty'      => ['required', 'integer', 'min:1', 'max:99'],
-            'items.*.addons'   => ['nullable', 'array'],
-            'items.*.addons.*' => ['integer', 'min:1'],
+            'items.*.product_id' => ['required_without:items.*.id','integer','exists:products,id'],
+            'items.*.id'         => ['required_without:items.*.product_id','integer','exists:products,id'],
+            'items.*.qty'        => ['required', 'integer', 'min:1', 'max:99'],
+            'items.*.addons'     => ['nullable', 'array'],
+            'items.*.addons.*'   => ['integer', 'min:1'],
             'name'    => ['required', 'string', 'max:255'],
             'email'   => ['nullable', 'email', 'max:255'],
             'phone'   => ['required', 'string', 'max:30'],
@@ -175,7 +159,7 @@ class OrderController extends Controller
         $user = $request->user();
 
         return DB::transaction(function () use ($data, $user) {
-            $ids = collect($data['items'])->pluck('id')->unique();
+            $ids = collect($data['items'])->map(fn($r) => $r['product_id'] ?? $r['id'])->unique();
             $products = Product::whereIn('id', $ids)
                 ->get(['id', 'name', 'price', 'stock', 'image_url'])
                 ->keyBy('id');
@@ -202,22 +186,19 @@ class OrderController extends Controller
                 'coupon_code'     => null,
             ]);
 
-            // ✅ cột active động
             $activeCol = Schema::hasColumn('warranty_plans', 'is_active') ? 'is_active'
                        : (Schema::hasColumn('warranty_plans', 'active') ? 'active' : null);
 
             foreach ($data['items'] as $row) {
-                $p   = $products[$row['id']];
+                $pid = (int) ($row['product_id'] ?? $row['id']);
+                $p   = $products[$pid];
                 $qty = (int) $row['qty'];
 
                 $origin = (int) $p->price;
-
-                // ⚡ SỬA: dùng FlashSaleItem đúng bảng/cột
-                $fsItem = $this->getActiveFlashSaleItem($p->id);
+                $fsItem = $this->getActiveFlashSaleItem($pid);
                 $price  = $this->priceWithFlash($fsItem, $origin);
 
-                // Trừ kho an toàn
-                $affected = Product::where('id', $p->id)
+                $affected = Product::where('id', $pid)
                     ->where('stock', '>=', $qty)
                     ->decrement('stock', $qty);
                 if ($affected === 0) {
@@ -228,14 +209,13 @@ class OrderController extends Controller
                 $subtotalProducts += $line;
 
                 $orderItem = $order->items()->create([
-                    'product_id' => $p->id,
+                    'product_id' => $pid,
                     'name'       => $p->name,
                     'price'      => (int) $price,
                     'qty'        => $qty,
                     'image_url'  => $p->image_url,
                 ]);
 
-                // ✅ nhận mọi plan id active
                 $addonIds = collect($row['addons'] ?? [])->filter()->unique();
                 if ($addonIds->isNotEmpty()) {
                     $plans = WarrantyPlan::whereIn('id', $addonIds)
@@ -322,6 +302,9 @@ class OrderController extends Controller
         });
     }
 
+    /* ==========================================================
+     |  OTHERS
+     * ==========================================================*/
     public function cancel(Request $request, $id)
     {
         $order = Order::with(['items'])
