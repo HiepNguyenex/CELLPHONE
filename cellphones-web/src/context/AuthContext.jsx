@@ -5,74 +5,42 @@ import { getUser, login as apiLogin, register as apiRegister, logout as apiLogou
 export const AuthContext = createContext(null);
 export const useAuth = () => useContext(AuthContext);
 
-// LocalStorage keys
-const USER_TOKEN_KEY  = "token";
-const ADMIN_TOKEN_KEY = "admin_token";
-const USER_CACHE_KEY  = "user_cache_v1";
-
 export default function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true); // đừng render nút "Đăng nhập" khi loading
+  const [user, setUser]   = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  // Hydrate từ cache + refresh nền
+  // Tự load /v1/user nếu đang có token hoặc admin_token
   useEffect(() => {
     const ac = new AbortController();
-
     (async () => {
       try {
-        const token = localStorage.getItem(USER_TOKEN_KEY);
-        const admin = localStorage.getItem(ADMIN_TOKEN_KEY);
-
-        // Không có token -> coi như chưa đăng nhập
-        if (!token && !admin) {
+        const hasToken =
+          !!localStorage.getItem("admin_token") || !!localStorage.getItem("token");
+        if (!hasToken) {
           setLoading(false);
           return;
         }
-
-        // ⚡ Hydrate UI ngay từ cache để không "out" khi F5
-        const cached = localStorage.getItem(USER_CACHE_KEY);
-        if (cached) {
-          try {
-            const parsed = JSON.parse(cached);
-            if (parsed && typeof parsed === "object") setUser(parsed);
-          } catch {}
-        }
-
-        // Refresh user từ BE (nền). Chỉ xóa token khi 401/419
         const res = await getUser(ac.signal);
-        const u = res?.data ?? res ?? null;
-        setUser(u);
-        // cập nhật cache
-        localStorage.setItem(USER_CACHE_KEY, JSON.stringify(u || null));
-      } catch (e) {
-        const status = e?.response?.status;
-        // ❗️Chỉ khi thật sự hết hạn / không hợp lệ mới xóa token
-        if (status === 401 || status === 419) {
-          localStorage.removeItem(USER_TOKEN_KEY);
-          localStorage.removeItem(ADMIN_TOKEN_KEY);
-          localStorage.removeItem(USER_CACHE_KEY);
-          setUser(null);
-        } else {
-          // mạng lỗi / timeout / abort -> GIỮ token & cache, không xóa
-          // giữ nguyên state user (hydrated từ cache)
-        }
+        setUser(res?.data ?? res ?? null);
+      } catch {
+        // token hỏng → xoá để tránh vòng lặp 401
+        localStorage.removeItem("token");
+        localStorage.removeItem("admin_token");
+        setUser(null);
       } finally {
         setLoading(false);
       }
     })();
-
     return () => ac.abort();
   }, []);
 
-  // ==== Actions người dùng ====
+  // ==== Actions người dùng (không dùng cho admin_login) ====
   const login = async (email, password) => {
-    const res  = await apiLogin({ email, password });
+    const res = await apiLogin({ email, password });
+    // BE trả { token, user }
     const data = res?.data ?? {};
-    if (data?.token) localStorage.setItem(USER_TOKEN_KEY, data.token);
-    if (data?.user)  {
-      setUser(data.user);
-      localStorage.setItem(USER_CACHE_KEY, JSON.stringify(data.user));
-    }
+    if (data?.token) localStorage.setItem("token", data.token);
+    if (data?.user)  setUser(data.user);
     return data;
   };
 
@@ -82,19 +50,9 @@ export default function AuthProvider({ children }) {
 
   const logout = async () => {
     try { await apiLogout(); } catch {}
-    localStorage.removeItem(USER_TOKEN_KEY);
-    localStorage.removeItem(ADMIN_TOKEN_KEY);
-    localStorage.removeItem(USER_CACHE_KEY);
+    localStorage.removeItem("token");
+    localStorage.removeItem("admin_token");
     setUser(null);
-  };
-
-  // Tuỳ lúc cần gọi lại để đồng bộ user từ server
-  const refreshUser = async () => {
-    const res = await getUser();
-    const u   = res?.data ?? res ?? null;
-    setUser(u);
-    localStorage.setItem(USER_CACHE_KEY, JSON.stringify(u || null));
-    return u;
   };
 
   const value = useMemo(() => ({
@@ -103,10 +61,12 @@ export default function AuthProvider({ children }) {
     login,
     register,
     logout,
-    refreshUser,
     setUser,
     isAdmin: !!user?.is_admin,
   }), [user, loading]);
+     
 
+
+  
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
