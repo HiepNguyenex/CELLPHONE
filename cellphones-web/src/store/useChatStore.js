@@ -19,6 +19,9 @@ export const useChatStore = create(
       clearUnread() { set({ unread: 0 }); },
       reset() { set({ sessionId: null, messages: [], unread: 0 }); },
     }),
-    { name: "cps_chat_store_v1" }
+    {
+      // ✅ bump version để “invalidate” localStorage cũ (xoá sid rác)
+      name: "cps_chat_store_v2",
+    }
   )
 );

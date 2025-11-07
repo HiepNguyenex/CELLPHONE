@@ -6,8 +6,7 @@ import { useChatStore } from "../../store/useChatStore";
 import {
   startChatSession,
   sendChatMessage,
-  // (tuỳ chọn) export nếu BE có API này:
-  // getChatHistory,
+  getChatHistory,             // ✅ dùng để probe session còn hợp lệ
 } from "../../services/api";
 
 // Markdown safe render
@@ -15,6 +14,7 @@ import { marked } from "marked";
 import DOMPurify from "dompurify";
 import hljs from "highlight.js";
 import "highlight.js/styles/github-dark.css";
+import axios from "axios";
 
 // ====== Icons (inline SVG) ======
 const IconChat = (p) => <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.7" {...p}><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M3 12a9 9 0 1018 0 9 9 0 10-18 0z"/></svg>;
@@ -60,6 +60,7 @@ export default function ChatBubble() {
   const abortRef = useRef(null);
   const atBottomRef = useRef(true);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const submittingRef = useRef(false); // 🔒 chống submit chồng
 
   // Auto scroll bottom on new messages
   useEffect(() => {
@@ -67,7 +68,6 @@ export default function ChatBubble() {
     if (atBottomRef.current) {
       listRef.current.scrollTop = listRef.current.scrollHeight + 400;
     } else {
-      // có msg mới mà user đang xem ở trên -> show nút scroll
       setShowScrollBtn(true);
       if (!open) incUnread();
     }
@@ -87,29 +87,34 @@ export default function ChatBubble() {
     return () => el.removeEventListener("scroll", onScroll);
   }, []);
 
-  // open -> ensure session
+  // open -> ensure session (probe sid cũ; nếu 404 thì tạo mới)
   const ensureSession = useCallback(async () => {
-    if (sessionId) return sessionId;
-    setBooting(true);
     setErr("");
+    // Nếu đã có session hiện tại -> probe nhanh
+    if (sessionId) {
+      try {
+        await getChatHistory(sessionId, { limit: 1 });
+        return sessionId; // còn hợp lệ
+      } catch (e) {
+        if (e?.response?.status !== 404) throw e; // lỗi khác thì ném ra
+        // 404: sid rác -> tạo mới ở dưới
+      }
+    }
+
+    setBooting(true);
     try {
       const { data } = await startChatSession();
       setSession(data.session_id);
       if (data.message) push("bot", data.message);
-      // (tuỳ chọn) load lịch sử:
-      // const hist = await getChatHistory?.(data.session_id);
-      // if (hist?.data?.messages) {
-      //   replaceMessages(hist.data.messages.map(m => ({ id: crypto.randomUUID(), role: m.role, text: m.text, ts: m.ts })));
-      // }
       return data.session_id;
     } catch (e) {
       console.error(e);
-      setErr("Không thể khởi tạo phiên chat. Vui lòng thử lại.");
+      setErr("Không thể khởi tạo phiên chat. Vui lòng đăng nhập và thử lại.");
       throw e;
     } finally {
       setBooting(false);
     }
-  }, [sessionId, setSession, push /*, replaceMessages*/]);
+  }, [sessionId, setSession, push]);
 
   const handleOpen = useCallback(async () => {
     setOpen(true);
@@ -133,54 +138,84 @@ export default function ChatBubble() {
       setSending(true);
       setErr("");
 
-      // Abort trước đó nếu còn
-      if (abortRef.current) abortRef.current.abort();
+      // Abort request trước đó nếu còn
+      try { abortRef.current?.abort(); } catch {}
       abortRef.current = new AbortController();
 
       try {
         const { data } = await sendChatMessage(sessionId, text, { signal: abortRef.current.signal });
         push("bot", data?.response ?? "(không có phản hồi)");
       } catch (e) {
-        if (e?.name === "CanceledError" || e?.name === "AbortError") {
-          // user bấm Stop
-        } else {
+        const st = e?.response?.status;
+
+        // 🔁 Auto-heal: 404 Not Found (sid rác) -> tạo phiên mới và thử lại 1 lần
+        if (st === 404) {
+          try {
+            const { data } = await startChatSession();
+            setSession(data.session_id);
+            const r2 = await sendChatMessage(data.session_id, text, { signal: abortRef.current.signal });
+            push("bot", r2?.data?.response ?? "(không có phản hồi)");
+            return;
+          } catch (_) {
+            // rơi xuống khối báo lỗi chung
+          }
+        }
+
+        // ✅ nhận diện đầy đủ cancel/abort các kiểu
+        const canceled =
+          axios.isCancel?.(e) ||
+          e?.code === "ERR_CANCELED" ||
+          e?.name === "CanceledError" ||
+          e?.name === "AbortError" ||
+          String(e?.message || "").toLowerCase().includes("aborted") ||
+          String(e?.message || "").toLowerCase().includes("canceled");
+
+        if (!canceled) {
           console.error(e);
           push("bot", "Xin lỗi, mình đang gặp sự cố. Bạn thử lại giúp mình nhé.");
-          setErr("Hệ thống đang bận hoặc mất kết nối.");
+          setErr(st === 401 ? "Phiên đăng nhập đã hết hạn." : "Hệ thống đang bận hoặc mất kết nối.");
         }
       } finally {
         setSending(false);
         abortRef.current = null;
       }
     },
-    [sessionId, push]
+    [sessionId, push, setSession]
   );
 
   const handleSubmit = useCallback(
     async (e) => {
       e?.preventDefault?.();
+
+      // 🔒 chống gửi chồng + đang gửi
+      if (submittingRef.current || sending) return;
+
       const text = input.trim();
       if (!text) return;
 
-      if (!sessionId) {
-        try { await ensureSession(); } catch { return; }
+      submittingRef.current = true;
+      try {
+        if (!sessionId) {
+          try { await ensureSession(); } catch { return; }
+        }
+        push("user", text);
+        setInput("");
+        await send(text);
+      } finally {
+        submittingRef.current = false;
       }
-
-      push("user", text);
-      setInput("");
-      await send(text);
     },
-    [input, sessionId, ensureSession, send, push]
+    [input, sessionId, ensureSession, send, push, sending]
   );
 
   const onKeyDown = useCallback(
     (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
-        if (canSend) handleSubmit(e);
+        handleSubmit(e);
       }
     },
-    [canSend, handleSubmit]
+    [handleSubmit]
   );
 
   const copyText = useCallback(async (t) => {
@@ -340,9 +375,7 @@ export default function ChatBubble() {
                       maxRows={6}
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (canSend) handleSubmit(e); }
-                      }}
+                      onKeyDown={onKeyDown}
                       placeholder="Nhập tin… (Enter gửi, Shift+Enter xuống dòng)"
                       className="flex-1 px-3 py-2 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
                       disabled={sending}
@@ -350,8 +383,8 @@ export default function ChatBubble() {
                     <button
                       type={sending ? "button" : "submit"}
                       onClick={sending ? stopSending : undefined}
-                      disabled={!canSend && !sending}
-                      className={`px-3 py-2 rounded-xl text-white inline-flex items-center gap-1 ${sending ? "bg-red-500 hover:bg-red-600" : canSend ? "bg-blue-600 hover:bg-blue-700" : "bg-gray-400 cursor-not-allowed"}`}
+                      disabled={(input.trim().length === 0) && !sending}
+                      className={`px-3 py-2 rounded-xl text-white inline-flex items-center gap-1 ${sending ? "bg-red-500 hover:bg-red-600" : input.trim().length > 0 ? "bg-blue-600 hover:bg-blue-700" : "bg-gray-400 cursor-not-allowed"}`}
                       title={sending ? "Dừng phản hồi" : "Gửi"}
                     >
                       {sending ? <><IconStop /> Dừng</> : <><IconSend /><span className="hidden sm:inline">Gửi</span></>}

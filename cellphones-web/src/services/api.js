@@ -16,28 +16,52 @@ function toFormData(obj = {}) {
   return fd;
 }
 
-// ✅ KHÔNG gửi cookie cross-site (Sanctum PAT không cần cookie)
+// ============================ AXIOS INSTANCE ========================
 const api = axios.create({
   baseURL: BASE_URL,
   withCredentials: false,
-  headers: { Accept: "application/json" },
+  timeout: 20000, // ✅ THÊM: tránh treo request quá lâu
+  headers: {
+    Accept: "application/json",
+    "X-Requested-With": "XMLHttpRequest", // ✅ THÊM: giúp một số middleware Laravel nhận dạng XHR
+  },
 });
+
+// ============================ AUTH HELPERS ==========================
+const USER_TOKEN_KEY = "token";
+const ADMIN_TOKEN_KEY = "admin_token";
+
+// ✅ THÊM: tiện ích đặt/xoá token thống nhất
+export function setAuthToken(token, isAdmin = false) {
+  localStorage.setItem(isAdmin ? ADMIN_TOKEN_KEY : USER_TOKEN_KEY, token || "");
+}
+export function clearAuthToken() {
+  localStorage.removeItem(USER_TOKEN_KEY);
+  localStorage.removeItem(ADMIN_TOKEN_KEY);
+}
 
 // ===== Interceptors =====
 api.interceptors.request.use((config) => {
-  const adminToken = localStorage.getItem("admin_token");
-  const userToken = localStorage.getItem("token");
+  const adminToken = localStorage.getItem(ADMIN_TOKEN_KEY);
+  const userToken = localStorage.getItem(USER_TOKEN_KEY);
   const token = adminToken || userToken;
-  if (token) config.headers.Authorization = `Bearer ${token}`;
+
+  if (token && token.trim()) {
+    config.headers.Authorization = `Bearer ${token}`;
+  } else {
+    // ✅ THÊM: nếu không có token thì xoá hẳn header để tránh gửi “Bearer ” rỗng
+    delete config.headers.Authorization;
+  }
   return config;
 });
 
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    if (err?.response?.status === 401) {
-      localStorage.removeItem("token");
-      localStorage.removeItem("admin_token");
+    // ⚡ SỬA: gom logic clear token khi 401
+    const status = err?.response?.status;
+    if (status === 401) {
+      clearAuthToken();
     }
     return Promise.reject(err);
   }
@@ -52,6 +76,9 @@ export const login = async (data) => api.post("/v1/login", data);
 export const register = async (data) => api.post("/v1/register", data);
 export const getUser = (signal) => api.get("/v1/user", { signal });
 export const logout = async () => api.post("/v1/logout");
+
+// ✅ THÊM: Ping để kiểm tra BE sống/chết
+export const ping = (signal) => api.get("/v1/ping", { signal });
 
 // ============================ CATALOG (PUBLIC) ======================
 export const getProducts = (params = {}, signal) =>
@@ -220,7 +247,8 @@ export const adminCreateBrand = (payload = {}) =>
   api.post("/v1/admin/brands", toFormData(payload));
 export const adminUpdateBrand = (id, payload = {}) =>
   api.post(`/v1/admin/brands/${id}`, toFormData(payload));
-export const adminDeleteBrand = (id) => api.delete(`/v1/admin/brands/${id}`);
+export const adminDeleteBrand = (id) =>
+  api.delete(`/v1/admin/brands/${id}`);
 
 // ORDERS
 export const adminGetOrders = (params = {}) =>
@@ -340,9 +368,9 @@ export const startChatSession = (config = {}) =>
 // Gửi tin nhắn đến bot — hỗ trợ AbortController.signal qua config
 // Trả về: { response: string }
 export const sendChatMessage = (sessionId, text, config = {}) =>
-  api.post(`/v1/chat/${encodeURIComponent(sessionId)}/message`,
-    // Gửi cả 'prompt' và 'message' để tương thích mọi phiên bản BE
-    { prompt: text, message: text },
+  api.post(
+    `/v1/chat/${encodeURIComponent(sessionId)}/message`,
+    { prompt: text, message: text }, // gửi cả 'prompt' và 'message' để tương thích mọi phiên bản BE
     config
   );
 
