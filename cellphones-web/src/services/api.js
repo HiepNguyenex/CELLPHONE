@@ -22,8 +22,8 @@ const api = axios.create({
   withCredentials: false,
   timeout: 20000,
   headers: {
+    // ❗ Chỉ để Accept để GET trở thành "simple request"
     Accept: "application/json",
-    "X-Requested-With": "XMLHttpRequest",
   },
 });
 
@@ -42,12 +42,30 @@ export function clearAuthToken() {
 // ===== Interceptors =====
 api.interceptors.request.use((config) => {
   const adminToken = localStorage.getItem(ADMIN_TOKEN_KEY);
-  const userToken = localStorage.getItem(USER_TOKEN_KEY);
+  const userToken  = localStorage.getItem(USER_TOKEN_KEY);
+
   const url = String(config.url || "");
+  const method = String(config.method || "get").toUpperCase();
+
+  // ✅ Chỉ thêm X-Requested-With cho phương thức KHÔNG PHẢI GET
+  if (method !== "GET") {
+    config.headers["X-Requested-With"] = "XMLHttpRequest";
+  } else {
+    delete config.headers["X-Requested-With"];
+  }
+
+  // ✅ Chỉ gắn Bearer khi cần (để GET public không kích hoạt preflight)
   const isAdminApi = /^\/?v1\/admin\//i.test(url);
+  const isUserGet  = /^\/?v1\/(user|orders|wishlist)\b/i.test(url); // các GET cần auth
+  const needsAuth  = method !== "GET" || isAdminApi || isUserGet;
+
   const token = isAdminApi ? (adminToken || userToken) : (userToken || adminToken);
-  if (token && token.trim()) config.headers.Authorization = `Bearer ${token}`;
-  else delete config.headers.Authorization;
+  if (needsAuth && token && token.trim()) {
+    config.headers.Authorization = `Bearer ${token}`;
+  } else {
+    delete config.headers.Authorization;
+  }
+
   return config;
 });
 
@@ -136,9 +154,7 @@ export const mapCartToItems = (cart = []) =>
     product_id: Number(p.product_id ?? p.id),
     qty: Number(p.qty ?? 1),
     addons: Array.isArray(p?.services?.warranty_options)
-      ? p.services.warranty_options
-          .map((x) => Number(x))
-          .filter(Number.isFinite)
+      ? p.services.warranty_options.map((x) => Number(x)).filter(Number.isFinite)
       : [],
   }));
 
@@ -197,11 +213,7 @@ export const adminGetProduct = (id) =>
 // PRODUCT IMAGES
 export const adminGetProductImages = (productId) =>
   api.get(`/v1/admin/products/${productId}/images`);
-export const adminUploadProductImage = (
-  productId,
-  fileOrUrl,
-  isPrimary = false
-) => {
+export const adminUploadProductImage = (productId, fileOrUrl, isPrimary = false) => {
   const fd = new FormData();
   if (fileOrUrl instanceof File) fd.append("image", fileOrUrl);
   else fd.append("url", String(fileOrUrl));
@@ -221,9 +233,7 @@ export const adminGetProductVariants = (productId, params = {}) =>
 export const adminCreateProductVariant = (productId, payload = {}) =>
   api.post(`/v1/admin/products/${productId}/variants`, payload);
 export const adminBulkUpsertProductVariants = (productId, variants = []) =>
-  api.post(`/v1/admin/products/${productId}/variants/bulk-upsert`, {
-    variants,
-  });
+  api.post(`/v1/admin/products/${productId}/variants/bulk-upsert`, { variants });
 export const adminGetProductVariant = (variantId) =>
   api.get(`/v1/admin/product-variants/${variantId}`);
 export const adminUpdateProductVariant = (variantId, payload = {}) =>
@@ -255,8 +265,7 @@ export const adminDeleteBrand = (id) =>
 export const adminGetOrders = (params = {}) =>
   api.get("/v1/admin/orders", { params });
 export const adminGetOrder = (id) => api.get(`/v1/admin/orders/${id}`);
-export const adminDeleteOrder = (id) =>
-  api.delete(`/v1/admin/orders/${id}`);
+export const adminDeleteOrder = (id) => api.delete(`/v1/admin/orders/${id}`);
 export const adminUpdateOrderStatus = (id, status, note) =>
   api.post(`/v1/admin/orders/${id}/status`, { status, note });
 export const adminDownloadInvoice = (id) =>
